@@ -61,6 +61,9 @@ RUN pip install --upgrade pip && \
 # Копируем код приложения
 COPY . .
 
+# Создаем необходимые директории
+RUN mkdir -p data
+
 # Указываем порт
 EXPOSE 8000
 

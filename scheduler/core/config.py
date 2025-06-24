@@ -11,7 +11,7 @@ from urllib.parse import quote_plus
 
 # Загружаем переменные окружения из файлов в правильном порядке
 # В Docker контейнере будет загружен env.prod
-for env_file in ['.env.prod', '.env.dev', '.env']:
+for env_file in ['.env.prod', '.env_scheduler', '.env.dev', '.env']:
     env_path = Path(env_file)
     if env_path.exists():
         load_dotenv(dotenv_path=env_path)
@@ -86,7 +86,7 @@ class SchedulerSettings(BaseSettings):
     class Config:
         case_sensitive = True
         # Указываем файлы окружения в порядке приоритета
-        env_file = ('.env.prod', '.env.dev', '.env') 
+        env_file = ('.env.prod', '.env_scheduler', '.env.dev', '.env') 
         env_file_encoding = 'utf-8'
         extra = 'ignore' # Игнорировать лишние переменные в env
 

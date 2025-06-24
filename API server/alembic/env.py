@@ -82,14 +82,13 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = AsyncEngine(engine_from_config(
-        {
-            "sqlalchemy.url": get_url(),
-            "sqlalchemy.poolclass": pool.NullPool
-        },
-        prefix="sqlalchemy.",
+    from sqlalchemy.ext.asyncio import create_async_engine
+    
+    connectable = create_async_engine(
+        get_url(),
+        poolclass=pool.NullPool,
         future=True
-    ))
+    )
 
     async def run_async_migrations():
         async with connectable.connect() as connection:

@@ -35,8 +35,8 @@ redis_client = None
 async def lifespan(app: FastAPI):
     # Код, который выполняется при старте
     logger.info("Приложение запускается...")
-    # Создаем таблицы при старте (если они не существуют)
-    await create_tables()
+    # Временно отключаем создание таблиц - используем Alembic
+    # await create_tables()
     
     # ---> Инициализация Redis клиента < ---
     global redis_client

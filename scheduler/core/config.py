@@ -2,15 +2,20 @@ import os
 from pydantic_settings import BaseSettings
 from pathlib import Path
 from dotenv import load_dotenv
-from pydantic import Field, PostgresDsn, validator, AnyUrl
+from pydantic import Field, validator, AnyUrl
 from typing import Optional, Any, Dict, List
 import logging
 import datetime
 from zoneinfo import ZoneInfo
+from urllib.parse import quote_plus
 
-# Ищем .env файл в текущей директории scheduler/ или выше
-env_path = Path('.') / '.env'
-load_dotenv(dotenv_path=env_path)
+# Загружаем переменные окружения из файлов в правильном порядке
+# В Docker контейнере будет загружен env.prod
+for env_file in ['.env.prod', '.env.dev', '.env']:
+    env_path = Path(env_file)
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+        break
 
 class SchedulerSettings(BaseSettings):
     # --- Настройки базы данных ---
@@ -20,8 +25,7 @@ class SchedulerSettings(BaseSettings):
     POSTGRES_USER: str = Field(..., validation_alias='POSTGRES_USER')
     POSTGRES_PASSWORD: str = Field(..., validation_alias='POSTGRES_PASSWORD')
 
-    # Собираем URL для psycopg (для NOTIFY) и APScheduler
-    # APScheduler тоже может использовать этот URL
+    # DATABASE_URL - будет автоматически собран из компонентов выше
     DATABASE_URL: Optional[str] = None
 
     # --- URL других сервисов ---
@@ -56,17 +60,22 @@ class SchedulerSettings(BaseSettings):
 
     @validator("DATABASE_URL", pre=True, always=True)
     def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> str:
-        if isinstance(v, str):
+        # Если DATABASE_URL уже задан в переменных окружения, используем его
+        if isinstance(v, str) and v:
             return v
-        dsn = PostgresDsn.build(
-            scheme="postgresql+psycopg",
-            username=values.get("POSTGRES_USER"),
-            password=values.get("POSTGRES_PASSWORD"),
-            host=values.get("POSTGRES_HOST"),
-            port=values.get("POSTGRES_PORT"),
-            path=f"/{values.get('POSTGRES_DB') or ''}",
-        )
-        return str(dsn)
+        
+        # Иначе собираем из компонентов
+        username = values.get("POSTGRES_USER", "")
+        password = values.get("POSTGRES_PASSWORD", "")
+        host = values.get("POSTGRES_HOST", "")
+        port = values.get("POSTGRES_PORT", 5432)
+        database = values.get("POSTGRES_DB", "")
+        
+        # Простая сборка URL без использования pydantic PostgresDsn
+        # который имеет проблемы с парсингом сложных паролей
+        dsn = f"postgresql+psycopg://{username}:{password}@{host}:{port}/{database}"
+        
+        return dsn
 
     @validator("API_URL", "BOT_API_URL", "HEALTHCHECK_API_URL", "HEALTHCHECK_BOT_URL", "HEALTHCHECK_BOT_SEND_MESSAGE_URL", pre=True)
     def url_to_string(cls, v: Any) -> str:
@@ -76,9 +85,7 @@ class SchedulerSettings(BaseSettings):
 
     class Config:
         case_sensitive = True
-        # Можно указать .env файл явно, если он всегда лежит в папке scheduler
-        # env_file = ".env"
-        # env_file_encoding = 'utf-8'
+        # Указываем файлы окружения в порядке приоритета
         env_file = ('.env.prod', '.env.dev', '.env') 
         env_file_encoding = 'utf-8'
         extra = 'ignore' # Игнорировать лишние переменные в env
@@ -94,35 +101,3 @@ local_time = datetime.datetime.now(ZoneInfo(scheduler_settings.TIMEZONE))
 logger.info("🕐🕐🕐 ТЕКУЩЕЕ ВРЕМЯ В КРАСНОЯРСКЕ: {} 🕐🕐🕐".format(local_time.strftime("%Y-%m-%d %H:%M:%S %Z (UTC%z)")))
 logger.info("="*80)
 
-# --- Опционально: Конфигурация логирования на основе настроек --- #
-# import logging.config
-# logging_config = {
-#     'version': 1,
-#     'disable_existing_loggers': False,
-#     'formatters': {
-#         'standard': {
-#             'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-#         },
-#     },
-#     'handlers': {
-#         'console': {
-#             'level': scheduler_settings.LOG_LEVEL,
-#             'formatter': 'standard',
-#             'class': 'logging.StreamHandler',
-#         },
-#     },
-#     'loggers': {
-#         '': { # root logger
-#             'handlers': ['console'],
-#             'level': scheduler_settings.LOG_LEVEL,
-#             'propagate': True
-#         },
-#         # Можно добавить конфигурации для конкретных логгеров
-#         'apscheduler': {
-#             'handlers': ['console'],
-#             'level': 'WARNING', # Уменьшить шум от APScheduler
-#             'propagate': False
-#         },
-#     }
-# }
-# logging.config.dictConfig(logging_config)

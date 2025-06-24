@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Фон -->
+  <rect width="192" height="192" rx="24" fill="#007AFF"/>
+  
+  <!-- SUP доска -->
+  <rect x="48" y="72" width="96" height="16" rx="8" fill="white"/>
+  
+  <!-- Весло -->
+  <rect x="86" y="32" width="4" height="64" fill="white"/>
+  <ellipse cx="88" cy="32" rx="8" ry="4" fill="white"/>
+  
+  <!-- Волны -->
+  <path d="M24 120 Q48 112 72 120 T120 120 T168 120" stroke="white" stroke-width="3" fill="none"/>
+  <path d="M24 136 Q48 128 72 136 T120 136 T168 136" stroke="white" stroke-width="2" fill="none" opacity="0.7"/>
+  
+  <!-- Текст S -->
+  <text x="96" y="164" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="white" text-anchor="middle">S</text>
+</svg> 

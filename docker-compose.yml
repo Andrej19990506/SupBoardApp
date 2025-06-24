@@ -1,0 +1,193 @@
+services:
+  bot:
+    build: 
+      context: ./telegramBot
+    volumes:
+      - shared-data:/app/shared
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - BOT_HOST=0.0.0.0
+      - BOT_PORT=8003
+    env_file:
+      - ./env.dev
+    networks:
+      - subboard-network
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]
+
+  server:
+    build:
+      context: ./API server
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - shared-data:/app/shared
+    depends_on:
+        bot:
+            condition: service_started
+        postgres:
+            condition: service_healthy
+    env_file:
+      - ./env.dev
+    networks:
+      - subboard-network
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+
+  scheduler:
+    build:
+      context: ./scheduler
+      dockerfile: Dockerfile
+    expose:
+      - "8002"
+    volumes:
+      - shared-data:/app/shared
+    depends_on:
+      - server
+      - postgres
+    env_file:
+      - ./env.dev
+    networks:
+      - subboard-network
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8002"]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  frontend:
+    build:
+      context: ./subboard-frontend
+      target: production-build
+      args:
+        VITE_APP_API_URL: ${VITE_APP_API_URL} 
+        VITE_APP_WS_URL: ${VITE_APP_WS_URL}   
+    image: appsubboard-frontend-img:latest # Explicit image name
+    env_file:
+      - ./env.dev
+    # No command, ports, volumes, etc. - this service will not be run directly
+
+  websocket:
+    build:
+      context: ./websocket-service
+    expose:
+      - "8001"
+    volumes:
+      - ./websocket-service/src:/app/src
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8001
+      - HOST=0.0.0.0
+      - PYTHONPATH=/app
+    env_file:
+      - ./env.dev
+    depends_on:
+        postgres:
+            condition: service_healthy
+    networks:
+      - subboard-network
+    command: uvicorn src.asgi:app --host 0.0.0.0 --port 8001
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/docker-entrypoint.d/50-generate-config-js.sh:/docker-entrypoint.d/50-generate-config-js.sh:ro
+    depends_on:
+      - server
+      - websocket
+    environment:
+      - ENV_TYPE=development
+      - VITE_APP_DEBUG=true
+      - VITE_APP_API_URL=http://localhost/api
+      - VITE_APP_WS_URL=ws://localhost/api/ws
+      - APPLICATION_SERVER_KEY=BL9aHxCJHILa-O2H3lShmC3k-E7e8Tb1Krdm-lPeYEjV1PgF38LRS-Q8Ax0naHfu-cA-9W8WOdBlfYMvi3pFj_Q
+    env_file:
+      - ./env.dev
+    restart: unless-stopped
+    networks:
+      - subboard-network
+
+  postgres:
+    image: postgres:15-alpine
+    expose:
+      - "5432"
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=appsubboard
+      - POSTGRES_USER=postgres
+    env_file:
+      - ./env.dev
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - subboard-network
+    command: postgres -c 'max_connections=1000'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d appsubboard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  adminer:
+    image: adminer # Используем официальный образ Adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080" # Открываем порт 8080 на хосте
+    environment:
+      # Предзаполняем сервер по умолчанию (имя сервиса postgres)
+      - ADMINER_DEFAULT_SERVER=postgres 
+      # Используем приятную тему оформления
+      - ADMINER_DESIGN=flat 
+    depends_on:
+      - postgres # Запускаем после postgres
+    networks:
+      - subboard-network # Подключаем к той же сети, что и postgres
+
+  #  Сервис DragonflyDB 
+  cache:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+    volumes:
+      - dragonfly_data:/data # Для сохранения данных (опционально)
+    # Порт не публикуем наружу по умолчанию, доступ внутри сети Docker
+    # ports:
+    #  - "6379:6379" 
+    networks:
+      - subboard-network # Подключаем к нашей сети
+    command: ["--logtostderr"] # Выводим логи в stderr для Docker
+    ulimits: # Рекомендуемые лимиты
+      memlock: -1
+      nofile:
+        soft: 65535
+        hard: 65535
+
+
+volumes:
+  shared-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./shared
+  postgres-data:
+  # ---> ДОБАВЛЕНО: Volume для DragonflyDB <---
+  dragonfly_data: 
+  # ---> КОНЕЦ ДОБАВЛЕНИЯ <---
+
+networks:
+  subboard-network:
+    driver: bridge 

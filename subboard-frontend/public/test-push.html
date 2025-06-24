@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Push Notifications Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .status { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; }
+        .warning { background: #fff3cd; border: 1px solid #ffeaa7; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔔 Push Notifications Diagnostic</h1>
+    
+    <div id="support-status"></div>
+    <div id="permission-status"></div>
+    <div id="subscription-status"></div>
+    <div id="sw-status"></div>
+    
+    <button onclick="requestPermission()">Запросить разрешение</button>
+    <button onclick="testSubscription()">Тест подписки</button>
+    <button onclick="testPushMessage()">Тест push сообщения</button>
+    <button onclick="showSubscriptionDetails()">Показать детали подписки</button>
+    
+    <div id="log"></div>
+    
+    <script>
+        let log = document.getElementById('log');
+        
+        function addLog(message, type = 'info') {
+            console.log(message);
+            const div = document.createElement('div');
+            div.innerHTML = `<pre>[${new Date().toLocaleTimeString()}] ${message}</pre>`;
+            log.appendChild(div);
+        }
+        
+        function checkSupport() {
+            const supportDiv = document.getElementById('support-status');
+            const hasServiceWorker = 'serviceWorker' in navigator;
+            const hasPushManager = 'PushManager' in window;
+            const hasNotification = 'Notification' in window;
+            const isSecure = window.isSecureContext;
+            
+            addLog(`🔍 Support check:
+- Service Worker: ${hasServiceWorker}
+- PushManager: ${hasPushManager}  
+- Notification: ${hasNotification}
+- Secure Context: ${isSecure}
+- URL: ${window.location.href}`);
+            
+            const isSupported = hasServiceWorker && hasPushManager && hasNotification;
+            supportDiv.className = `status ${isSupported ? 'success' : 'error'}`;
+            supportDiv.innerHTML = `Push support: ${isSupported ? '✅ Supported' : '❌ Not supported'}`;
+            
+            return isSupported;
+        }
+        
+        function checkPermission() {
+            const permissionDiv = document.getElementById('permission-status');
+            const permission = Notification.permission;
+            
+            addLog(`🔔 Permission: ${permission}`);
+            
+            const isGranted = permission === 'granted';
+            permissionDiv.className = `status ${isGranted ? 'success' : permission === 'default' ? 'warning' : 'error'}`;
+            permissionDiv.innerHTML = `Permission: ${permission} ${isGranted ? '✅' : permission === 'default' ? '⚠️' : '❌'}`;
+            
+            return isGranted;
+        }
+        
+        async function requestPermission() {
+            if (!('Notification' in window)) {
+                addLog('❌ Notifications not supported');
+                return false;
+            }
+            
+            try {
+                const permission = await Notification.requestPermission();
+                addLog(`📝 Permission result: ${permission}`);
+                checkPermission();
+                return permission === 'granted';
+            } catch (error) {
+                addLog(`❌ Permission request error: ${error.message}`);
+                return false;
+            }
+        }
+        
+        async function registerServiceWorker() {
+            if (!('serviceWorker' in navigator)) {
+                addLog('❌ Service Worker not supported');
+                return null;
+            }
+            
+            try {
+                const registration = await navigator.serviceWorker.register('/sw.js');
+                addLog(`✅ Service Worker registered: ${registration.scope}`);
+                
+                // Wait for activation
+                await new Promise((resolve) => {
+                    if (registration.active) {
+                        resolve();
+                    } else {
+                        registration.addEventListener('updatefound', () => {
+                            const worker = registration.installing;
+                            worker.addEventListener('statechange', () => {
+                                if (worker.state === 'activated') {
+                                    resolve();
+                                }
+                            });
+                        });
+                    }
+                });
+                
+                const swDiv = document.getElementById('sw-status');
+                swDiv.className = 'status success';
+                swDiv.innerHTML = '✅ Service Worker active';
+                
+                return registration;
+            } catch (error) {
+                addLog(`❌ Service Worker registration error: ${error.message}`);
+                const swDiv = document.getElementById('sw-status');
+                swDiv.className = 'status error';
+                swDiv.innerHTML = '❌ Service Worker failed';
+                return null;
+            }
+        }
+        
+        async function testSubscription() {
+            if (!checkSupport() || !checkPermission()) {
+                addLog('❌ Prerequisites not met');
+                return;
+            }
+            
+            const registration = await registerServiceWorker();
+            if (!registration) {
+                addLog('❌ Service Worker not available');
+                return;
+            }
+            
+            try {
+                // Get VAPID key
+                const response = await fetch('/api/v1/push-notifications/vapid-public-key');
+                const data = await response.json();
+                const vapidKey = data.public_key;
+                
+                addLog(`🔑 VAPID key: ${vapidKey.substring(0, 20)}...`);
+                
+                // Subscribe
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(vapidKey)
+                });
+                
+                addLog(`✅ Push subscription created`);
+                addLog(`📍 Endpoint: ${subscription.endpoint.substring(0, 50)}...`);
+                
+                // Send to server
+                const subscriptionData = {
+                    endpoint: subscription.endpoint,
+                    keys: {
+                        p256dh: arrayBufferToBase64(subscription.getKey('p256dh')),
+                        auth: arrayBufferToBase64(subscription.getKey('auth'))
+                    },
+                    user_agent: navigator.userAgent,
+                    notification_types: ['pending_confirmation', 'client_arriving_soon', 'client_overdue', 'return_time', 'return_overdue']
+                };
+                
+                const serverResponse = await fetch('/api/v1/push-notifications/subscriptions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(subscriptionData)
+                });
+                
+                if (serverResponse.ok) {
+                    addLog(`✅ Subscription sent to server`);
+                    const subDiv = document.getElementById('subscription-status');
+                    subDiv.className = 'status success';
+                    subDiv.innerHTML = '✅ Push subscription active';
+                } else {
+                    throw new Error(`Server error: ${serverResponse.status}`);
+                }
+                
+            } catch (error) {
+                addLog(`❌ Subscription error: ${error.message}`);
+                const subDiv = document.getElementById('subscription-status');
+                subDiv.className = 'status error';
+                subDiv.innerHTML = '❌ Push subscription failed';
+            }
+        }
+        
+        async function testPushMessage() {
+            try {
+                const response = await fetch('/api/v1/push-notifications/send-booking-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        booking_id: 142,
+                        client_name: 'Test Client',
+                        notification_type: 'pending_confirmation'
+                    })
+                });
+                
+                if (response.ok) {
+                    addLog('✅ Test push message sent');
+                } else {
+                    addLog(`❌ Failed to send test message: ${response.status}`);
+                }
+            } catch (error) {
+                addLog(`❌ Test message error: ${error.message}`);
+            }
+        }
+        
+        async function showSubscriptionDetails() {
+            if (!('serviceWorker' in navigator)) return;
+            
+            try {
+                const registration = await navigator.serviceWorker.getRegistration();
+                if (!registration) {
+                    addLog('❌ No service worker registration found');
+                    return;
+                }
+                
+                const subscription = await registration.pushManager.getSubscription();
+                if (!subscription) {
+                    addLog('❌ No push subscription found');
+                    return;
+                }
+                
+                addLog(`📋 Subscription details:
+- Endpoint: ${subscription.endpoint}
+- ExpirationTime: ${subscription.expirationTime}
+- Keys: ${Object.keys(subscription.toJSON().keys || {}).join(', ')}`);
+                
+            } catch (error) {
+                addLog(`❌ Error getting subscription details: ${error.message}`);
+            }
+        }
+        
+        // Helper functions
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+        
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        }
+        
+        // Initialize
+        checkSupport();
+        checkPermission();
+        
+        // Listen for push messages
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', event => {
+                addLog(`📨 SW message: ${JSON.stringify(event.data, null, 2)}`);
+            });
+        }
+    </script>
+</body>
+</html> 

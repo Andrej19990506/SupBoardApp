@@ -1,0 +1,209 @@
+/* Анимации для колокольчика уведомлений */
+@keyframes fadeInScale {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes bellFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-2px) rotate(1deg);
+  }
+  50% {
+    transform: translateY(-1px) rotate(0deg);
+  }
+  75% {
+    transform: translateY(-3px) rotate(-1deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 8px 25px rgba(220, 38, 38, 0.7);
+  }
+}
+
+@keyframes bellShake {
+  0%, 100% { transform: rotate(0deg); }
+  10%, 30%, 50%, 70%, 90% { transform: rotate(-12deg); }
+  20%, 40%, 60%, 80% { transform: rotate(12deg); }
+}
+
+@keyframes bellGlow {
+  0%, 100% {
+    box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 8px 25px rgba(79, 70, 229, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+}
+
+@keyframes badgeBounce {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.2) rotate(-5deg);
+  }
+  50% {
+    transform: scale(1.1) rotate(5deg);
+  }
+  75% {
+    transform: scale(1.15) rotate(-3deg);
+  }
+}
+
+@keyframes clickRipple {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+@keyframes notificationPop {
+  0% {
+    transform: scale(0.8) rotate(-10deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1) rotate(5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* Основные классы */
+.notification-tooltip {
+  animation: fadeInScale 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.notification-badge-urgent {
+  animation: pulse 1.5s ease-in-out infinite, badgeBounce 2s ease-in-out infinite;
+}
+
+.notification-bell-urgent {
+  animation: bellShake 0.8s ease-in-out, bellGlow 2s ease-in-out infinite !important;
+}
+
+.notification-bell-has-notifications {
+  animation: bellFloat 3s ease-in-out infinite, bellGlow 4s ease-in-out infinite;
+}
+
+/* Эффект клика для колокольчика */
+.notification-bell-click::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  background: rgba(79, 70, 229, 0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: clickRipple 0.6s ease-out;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Анимация появления нового уведомления */
+.notification-new {
+  animation: notificationPop 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* Кастомный скроллбар в премиум стиле */
+.notification-tooltip-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.notification-tooltip-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.notification-tooltip-content::-webkit-scrollbar-thumb {
+  background: linear-gradient(145deg, rgba(79, 70, 229, 0.6) 0%, rgba(59, 130, 246, 0.6) 100%);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.notification-tooltip-content::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(145deg, rgba(79, 70, 229, 0.8) 0%, rgba(59, 130, 246, 0.8) 100%);
+}
+
+/* Hover эффекты для кнопок */
+.notification-action-button {
+  transition: all 0.2s ease;
+}
+
+.notification-action-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.notification-remove-button {
+  transition: all 0.2s ease;
+}
+
+.notification-remove-button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #EF4444 !important;
+}
+
+/* Стили для разных приоритетов */
+.notification-item-urgent {
+  border-left: 4px solid #DC2626;
+}
+
+.notification-item-high {
+  border-left: 4px solid #F59E0B;
+}
+
+.notification-item-medium {
+  border-left: 4px solid #10B981;
+}
+
+.notification-item-low {
+  border-left: 4px solid #6B7280;
+}
+
+/* Анимация подсветки для кнопок */
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+.bell-shimmer {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.6s ease;
+  pointer-events: none;
+}
+
+/* Активируем анимацию при наведении */
+.bell-icon:hover .bell-shimmer {
+  animation: shimmer 0.8s ease-in-out;
+} 

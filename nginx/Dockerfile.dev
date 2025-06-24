@@ -1,0 +1,18 @@
+FROM nginx:alpine
+
+# Установка curl для healthcheck
+RUN apk add --no-cache curl
+
+# Создание директорий для SSL (не используется в dev, но nginx может жаловаться)
+RUN mkdir -p /etc/nginx/ssl/live/appninjabot.com
+
+# Удаляем стандартный конфиг
+RUN rm -f /etc/nginx/conf.d/default.conf
+
+# Конфигурация будет смонтирована через volume
+
+# Открываем порты для HTTP и HTTPS  
+EXPOSE 80 443
+
+# Запуск Nginx
+CMD ["nginx", "-g", "daemon off;"] 

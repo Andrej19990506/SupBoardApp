@@ -1,0 +1,124 @@
+# Переменные окружения и секреты
+.env
+.env.local
+.env.prod
+.env.production
+.env.dev
+.env.development
+*.env
+.env.*
+
+# Логи
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Временные файлы
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/
+postgres-data/
+
+# SSL сертификаты
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+certs/
+
+# Backup files
+*.bak
+*.backup
+*.tmp
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Nginx logs
+nginx_logs/
+
+# Application specific
+shared-data/
+uploads/
+avatars/
+scheduler_tasks.db
+
+# Secrets и конфиденциальные файлы
+secrets/
+private/
+applicationServerKey
+vapid_keys.json
+*.secret
+
+# Временные файлы разработки
+temp/
+tmp/
+.cache/ 

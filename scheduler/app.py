@@ -75,6 +75,13 @@ async def lifespan(app: FastAPI):
     # Инициализируем пул соединений с БД используя DATABASE_URL из настроек
     logger.info("🔍 Инициализация пула соединений с базой данных...")
     dsn = scheduler_settings.DATABASE_URL
+    # Преобразуем схему для asyncpg (не поддерживает postgresql+psycopg)
+    if dsn.startswith('postgresql+psycopg://'):
+        dsn = dsn.replace('postgresql+psycopg://', 'postgresql://')
+    elif dsn.startswith('postgresql+psycopg2://'):
+        dsn = dsn.replace('postgresql+psycopg2://', 'postgresql://')
+    elif dsn.startswith('postgres+psycopg://'):
+        dsn = dsn.replace('postgres+psycopg://', 'postgresql://')
     
     db_pool = None
     try:

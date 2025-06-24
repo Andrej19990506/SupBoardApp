@@ -72,14 +72,9 @@ from services.database_service import DatabaseService
 async def lifespan(app: FastAPI):
     logger.info("🚀 Инициализация сервиса и запуск шедулера...")
     
-    # Инициализируем пул соединений с БД
+    # Инициализируем пул соединений с БД используя DATABASE_URL из настроек
     logger.info("🔍 Инициализация пула соединений с базой данных...")
-    db_host = os.getenv('POSTGRES_HOST', 'postgres')
-    db_port = os.getenv('POSTGRES_PORT', '5432')
-    db_name = os.getenv('POSTGRES_DB', 'appninjabot')
-    db_user = os.getenv('POSTGRES_USER', 'postgres')
-    db_password = os.getenv('POSTGRES_PASSWORD', 'postgres')
-    dsn = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    dsn = scheduler_settings.DATABASE_URL
     
     db_pool = None
     try:

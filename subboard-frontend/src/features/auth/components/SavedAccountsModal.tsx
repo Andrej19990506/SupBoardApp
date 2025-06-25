@@ -368,11 +368,19 @@ const ModalContent = styled.div`
   }
   
   @media (max-width: 480px) {
-    max-width: calc(100vw - 24px);
-    margin: 12px;
-    border-radius: 16px;
-    padding: 20px;
-    max-height: calc(100vh - 60px);
+    max-width: calc(100vw - 20px);
+    margin: 10px;
+    border-radius: 14px;
+    padding: 16px;
+    max-height: calc(100vh - 40px);
+  }
+  
+  @media (max-width: 360px) {
+    max-width: calc(100vw - 16px);
+    margin: 8px;
+    border-radius: 12px;
+    padding: 12px;
+    max-height: calc(100vh - 32px);
   }
 
 `;
@@ -386,7 +394,11 @@ const Header = styled.div`
   }
   
   @media (max-width: 480px) {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
+  }
+  
+  @media (max-width: 360px) {
+    margin-bottom: 12px;
   }
 `;
 
@@ -400,7 +412,11 @@ const LogoContainer = styled.div`
   }
   
   @media (max-width: 480px) {
-    margin-bottom: 12px;
+    margin-bottom: 10px;
+  }
+  
+  @media (max-width: 360px) {
+    margin-bottom: 8px;
   }
 `;
 
@@ -417,8 +433,13 @@ const Title = styled.h2`
   }
   
   @media (max-width: 480px) {
-    font-size: 20px;
+    font-size: 18px;
     margin: 0 0 4px 0;
+  }
+  
+  @media (max-width: 360px) {
+    font-size: 16px;
+    margin: 0 0 3px 0;
   }
 `;
 
@@ -432,7 +453,11 @@ const Subtitle = styled.p`
   }
   
   @media (max-width: 480px) {
-    font-size: 12px;
+    font-size: 11px;
+  }
+  
+  @media (max-width: 360px) {
+    font-size: 10px;
   }
 `;
 
@@ -448,8 +473,13 @@ const AccountsList = styled.div`
   }
   
   @media (max-width: 480px) {
-    gap: 8px;
-    margin-bottom: 16px;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  
+  @media (max-width: 360px) {
+    gap: 4px;
+    margin-bottom: 12px;
   }
 `;
 
@@ -476,9 +506,15 @@ const AccountCard = styled(motion.div)`
   }
   
   @media (max-width: 480px) {
-    padding: 14px;
-    gap: 12px;
-    border-radius: 14px;
+    padding: 12px;
+    gap: 10px;
+    border-radius: 12px;
+  }
+  
+  @media (max-width: 360px) {
+    padding: 10px;
+    gap: 8px;
+    border-radius: 10px;
   }
 
   &::before {
@@ -535,8 +571,13 @@ const AccountAvatar = styled.div`
   }
   
   @media (max-width: 480px) {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
+  }
+  
+  @media (max-width: 360px) {
+    width: 32px;
+    height: 32px;
   }
 `;
 
@@ -570,7 +611,11 @@ const AvatarPlaceholder = styled.div`
   }
   
   @media (max-width: 480px) {
-    font-size: 14px;
+    font-size: 12px;
+  }
+  
+  @media (max-width: 360px) {
+    font-size: 10px;
   }
 `;
 
@@ -594,8 +639,13 @@ const AccountName = styled.div`
   }
   
   @media (max-width: 480px) {
-    font-size: 14px;
+    font-size: 13px;
     margin-bottom: 2px;
+  }
+  
+  @media (max-width: 360px) {
+    font-size: 12px;
+    margin-bottom: 1px;
   }
 `;
 
@@ -609,7 +659,11 @@ const AccountPhone = styled.div`
   }
   
   @media (max-width: 480px) {
-    font-size: 11px;
+    font-size: 10px;
+  }
+  
+  @media (max-width: 360px) {
+    font-size: 9px;
   }
 `;
 
@@ -619,7 +673,11 @@ const AccountStatus = styled.div`
   gap: 12px;
   
   @media (max-width: 480px) {
-    gap: 8px;
+    gap: 6px;
+  }
+  
+  @media (max-width: 360px) {
+    gap: 4px;
   }
 `;
 
@@ -640,8 +698,13 @@ const StatusIndicator = styled.div<{ color: string }>`
   }
   
   @media (max-width: 480px) {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
+  }
+  
+  @media (max-width: 360px) {
+    width: 20px;
+    height: 20px;
   }
   
   &::after {
@@ -655,10 +718,17 @@ const StatusIndicator = styled.div<{ color: string }>`
     right: 2px;
     
     @media (max-width: 480px) {
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
       top: 1px;
       right: 1px;
+    }
+    
+    @media (max-width: 360px) {
+      width: 4px;
+      height: 4px;
+      top: 0px;
+      right: 0px;
     }
   }
 `;
@@ -672,7 +742,11 @@ const StatusIcon = styled.div`
   }
   
   @media (max-width: 480px) {
-    font-size: 12px;
+    font-size: 11px;
+  }
+  
+  @media (max-width: 360px) {
+    font-size: 10px;
   }
 `;
 
@@ -699,9 +773,15 @@ const RemoveButton = styled(motion.button)`
   }
   
   @media (max-width: 480px) {
-    width: 24px;
-    height: 24px;
-    font-size: 12px;
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+  }
+  
+  @media (max-width: 360px) {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
   }
   
   &:hover {
@@ -745,11 +825,19 @@ const AddAccountButton = styled(motion.button)`
   }
   
   @media (max-width: 480px) {
-    padding: 12px;
-    font-size: 14px;
-    gap: 8px;
-    border-radius: 12px;
-    min-height: 44px;
+    padding: 10px;
+    font-size: 13px;
+    gap: 6px;
+    border-radius: 10px;
+    min-height: 40px;
+  }
+  
+  @media (max-width: 360px) {
+    padding: 8px;
+    font-size: 12px;
+    gap: 4px;
+    border-radius: 8px;
+    min-height: 36px;
   }
 
   &:hover {
@@ -784,9 +872,15 @@ const AddIcon = styled.div`
   }
   
   @media (max-width: 480px) {
-    width: 20px;
-    height: 20px;
-    font-size: 14px;
+    width: 18px;
+    height: 18px;
+    font-size: 12px;
+  }
+  
+  @media (max-width: 360px) {
+    width: 16px;
+    height: 16px;
+    font-size: 11px;
   }
 `;
 
@@ -801,8 +895,13 @@ const LastLogin = styled.div`
   }
   
   @media (max-width: 480px) {
-    font-size: 10px;
+    font-size: 9px;
     margin-top: 2px;
+  }
+  
+  @media (max-width: 360px) {
+    font-size: 8px;
+    margin-top: 1px;
   }
 `;
 

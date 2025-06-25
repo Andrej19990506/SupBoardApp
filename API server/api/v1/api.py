@@ -1,11 +1,12 @@
 # backend/API server/api/v1/api.py
 from fastapi import APIRouter
-from .endpoints import booking, push_notification, inventory, auth, user, customer
+from .endpoints import booking, push_notification, inventory, auth, user, customer, password_recovery
 
 api_router = APIRouter()
 
 # Авторизация
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(password_recovery.router, prefix="/auth", tags=["password-recovery"])
 
 # Новые модели бизнес-логики
 api_router.include_router(user.router, prefix="/users", tags=["users"])

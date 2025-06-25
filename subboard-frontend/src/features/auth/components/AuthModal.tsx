@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 import SavedAccountsModal from './SavedAccountsModal';
+import ForgotPasswordModal from './ForgotPasswordModal';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -16,7 +17,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
   onClose, 
   initialMode = 'login' 
 }) => {
-  const [mode, setMode] = useState<'login' | 'register' | 'savedAccounts'>(initialMode);
+  const [mode, setMode] = useState<'login' | 'register' | 'savedAccounts' | 'forgotPassword'>(initialMode);
 
   // Проверяем сохраненные аккаунты при открытии модала
   useEffect(() => {
@@ -40,6 +41,8 @@ const AuthModal: React.FC<AuthModalProps> = ({
   const handleSwitchToRegister = () => setMode('register');
   const handleSwitchToLogin = () => setMode('login');
   const handleShowLoginForm = () => setMode('login');
+  const handleForgotPassword = () => setMode('forgotPassword');
+  const handleBackToLogin = () => setMode('login');
 
   if (!isOpen) return null;
 
@@ -50,6 +53,17 @@ const AuthModal: React.FC<AuthModalProps> = ({
         isOpen={true}
         onClose={onClose || (() => {})}
         onShowLoginForm={handleShowLoginForm}
+      />
+    );
+  }
+
+  // Если показываем форму восстановления пароля
+  if (mode === 'forgotPassword') {
+    return (
+      <ForgotPasswordModal 
+        isOpen={true}
+        onClose={onClose || (() => {})}
+        onBackToLogin={handleBackToLogin}
       />
     );
   }
@@ -69,6 +83,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
               >
                 <LoginForm 
                   onSwitchToRegister={handleSwitchToRegister}
+                  onForgotPassword={handleForgotPassword}
                   onClose={onClose || (() => {})}
                 />
               </motion.div>

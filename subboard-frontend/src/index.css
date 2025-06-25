@@ -91,6 +91,67 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/* Адаптивные стили для маленьких телефонов */
+@media (max-width: 480px) {
+  html {
+    font-size: 12px; /* Еще больше уменьшаем базовый размер шрифта */
+  }
+  
+  /* Уменьшаем размеры заголовков */
+  h1 {
+    font-size: 1.8em;
+    line-height: 1.1;
+  }
+  
+  h2 {
+    font-size: 1.4em;
+    line-height: 1.2;
+  }
+  
+  h3 {
+    font-size: 1.2em;
+    line-height: 1.2;
+  }
+  
+  /* Уменьшаем кнопки */
+  button {
+    padding: 0.4em 0.8em;
+    font-size: 0.85em;
+    border-radius: 5px;
+  }
+  
+  /* Уменьшаем поля ввода */
+  input, textarea, select {
+    font-size: 0.85em;
+    padding: 0.5em 0.7em;
+  }
+}
+
+/* Для очень маленьких экранов */
+@media (max-width: 360px) {
+  html {
+    font-size: 13px; /* Еще меньше для маленьких экранов */
+  }
+  
+  h1 {
+    font-size: 2em;
+  }
+  
+  h2 {
+    font-size: 1.4em;
+  }
+  
+  button {
+    padding: 0.4em 0.8em;
+    font-size: 0.85em;
+  }
+  
+  input, textarea, select {
+    font-size: 0.85em;
+    padding: 0.5em 0.7em;
+  }
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

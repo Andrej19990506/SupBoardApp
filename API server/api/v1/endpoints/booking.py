@@ -60,30 +60,26 @@ async def list_bookings(
     db: AsyncSession = Depends(get_db_session),
     current_user = Depends(get_current_user_optional)
 ):
-    """Альтернативный endpoint для получения списка бронирований"""
+    """Endpoint для получения списка бронирований пользователя"""
     
     # Если пользователь не авторизован, возвращаем пустой список
     if not current_user:
+        print("❌ [list_bookings] Пользователь не авторизован")
         return []
     
-    # Если запрашиваются все бронирования (для админов)
-    if all_bookings:
-        print(f"🔍 [list_bookings] Админ запрос - показываем все бронирования для user_id: {current_user.id}")
-        return await get_bookings(db, status_filter=status)
+    print(f"✅ [list_bookings] Авторизованный пользователь: ID={current_user.id}, Имя={current_user.name}")
     
-    # Обычный пользователь - показываем только его бронирования
-    print(f"🔍 [list_bookings] Пользователь запрос - фильтруем для user_id: {current_user.id}")
+    # Получаем все бронирования
     all_user_bookings = await get_bookings(db, status_filter=status)
+    print(f"🔍 [list_bookings] Всего бронирований в БД: {len(all_user_bookings)}")
+    
+    # Фильтруем только бронирования текущего пользователя
     user_bookings = [booking for booking in all_user_bookings if booking.business_owner_id == current_user.id]
-    print(f"🔍 [list_bookings] Найдено бронирований пользователя: {len(user_bookings)} из {len(all_user_bookings)}")
+    print(f"🔍 [list_bookings] Бронирований пользователя {current_user.id}: {len(user_bookings)}")
+    
     return user_bookings
 
-@router.get("/", response_model=List[BookingOut])
-async def read_bookings(
-    status: str = Query(None, description="Фильтр по статусу (можно несколько через запятую)"),
-    db: AsyncSession = Depends(get_db_session)
-):
-    return await get_bookings(db, status_filter=status)
+# Публичный endpoint удален для безопасности - все бронирования должны быть доступны только авторизованным пользователям
 
 @router.post("/", response_model=BookingOut, status_code=status.HTTP_201_CREATED)
 async def add_booking(booking_in: BookingCreate, db: AsyncSession = Depends(get_db_session)):

@@ -752,6 +752,19 @@ class AuthSecurityService:
         Извлекает refresh token из HttpOnly cookie
         """
         return request.cookies.get("refresh_token")
+    
+    def set_refresh_token_cookie(self, response, refresh_token: str) -> None:
+        """
+        Устанавливает refresh token в HttpOnly cookie
+        """
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            max_age=self.SESSION_LIFETIME_HOURS * 3600,  # В секундах
+            httponly=True,
+            secure=True,  # Только HTTPS в продакшене
+            samesite="lax"
+        )
 
     async def cleanup_expired_data(self, db: AsyncSession) -> Dict[str, int]:
         """

@@ -154,6 +154,28 @@ class CRUDUser:
         await db.commit()
         await db.refresh(db_user)
         return db_user
+    
+    async def update_password(self, db: AsyncSession, user_id: int, new_password: str) -> bool:
+        """Обновить пароль пользователя"""
+        try:
+            db_user = await self.get_user(db, user_id)
+            if not db_user:
+                return False
+            
+            # Хешируем новый пароль
+            hashed_password = pwd_context.hash(new_password)
+            db_user.password_hash = hashed_password
+            
+            # Обновляем время изменения пароля
+            db_user.updated_at = datetime.utcnow()
+            
+            await db.commit()
+            await db.refresh(db_user)
+            return True
+            
+        except Exception:
+            await db.rollback()
+            return False
 
 # Создаем глобальный экземпляр
 user_crud = CRUDUser() 

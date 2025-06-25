@@ -14,18 +14,22 @@ import AnimatedLogo from '../../../shared/components/AnimatedLogo';
 
 interface LoginFormProps {
   onSwitchToRegister: () => void;
+  onForgotPassword: () => void;
   onClose: () => void;
 }
 
-const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onClose }) => {
+const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onForgotPassword, onClose }) => {
   const dispatch = useDispatch<AppDispatch>();
   const isLoading = useSelector(selectIsLoading);
   const error = useSelector(selectAuthError);
 
   const [formData, setFormData] = useState({
     phone: '', // Номер телефона для SMS
+    password: '', // Пароль для входа через пароль
   });
 
+  const [loginMode, setLoginMode] = useState<'sms' | 'password'>('sms'); // Режим входа
+  const [showPassword, setShowPassword] = useState(false); // Показать/скрыть пароль
   const [smsStep, setSmsStep] = useState<'phone' | 'code'>('phone');
   const [smsCode, setSmsCode] = useState('');
   const [countdown, setCountdown] = useState(0);
@@ -57,7 +61,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onClose }) =>
     
     // Форматируем в зависимости от длины
     if (normalizedDigits.length <= 1) return '+7';
-    if (normalizedDigits.length <= 4) return `+7 (${normalizedDigits.slice(1)}`;
+    if (normalizedDigits.length <= 4) return `+7 (${normalizedDigits.slice(1)})`;
     if (normalizedDigits.length <= 7) return `+7 (${normalizedDigits.slice(1, 4)}) ${normalizedDigits.slice(4)}`;
     if (normalizedDigits.length <= 9) return `+7 (${normalizedDigits.slice(1, 4)}) ${normalizedDigits.slice(4, 7)}-${normalizedDigits.slice(7)}`;
     return `+7 (${normalizedDigits.slice(1, 4)}) ${normalizedDigits.slice(4, 7)}-${normalizedDigits.slice(7, 9)}-${normalizedDigits.slice(9, 11)}`;
@@ -66,20 +70,20 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onClose }) =>
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     
-    if (name === 'phone') {
+    if (name === 'user-phone-number') {
       const formattedPhone = formatPhoneNumber(value);
       setFormData(prev => ({
         ...prev,
-        [name]: formattedPhone
+        phone: formattedPhone
       }));
       
       // Сбрасываем предыдущий результат проверки при изменении номера
       setPhoneCheckResult(null);
       setSmsError('');
       
-      // Проверяем номер если он полный (11 цифр)
+      // Проверяем номер если он полный (11 цифр) и режим SMS
       const digits = formattedPhone.replace(/\D/g, '');
-      if (digits.length === 11 && digits.startsWith('7')) {
+      if (digits.length === 11 && digits.startsWith('7') && loginMode === 'sms') {
         checkPhoneDebounced(formattedPhone);
       }
     } else {
@@ -87,6 +91,15 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onClose }) =>
         ...prev,
         [name]: value
       }));
+      
+      // Очищаем ошибки при изменении пароля
+      if (name === 'user-auth-password') {
+        setSmsError('');
+        setFormData(prev => ({
+          ...prev,
+          password: value
+        }));
+      }
     }
   };
 
@@ -147,36 +160,20 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onClose }) =>
     e.preventDefault();
     setSmsError('');
     
-    if (smsStep === 'phone') {
+    if (loginMode === 'password') {
+      // Авторизация через пароль
       if (!formData.phone) {
         setSmsError('Введите номер телефона');
         return;
       }
-
-      try {
-        // Сначала проверяем существование аккаунта
-        const checkResponse = await authService.checkPhoneExists(formData.phone);
-        
-        if (checkResponse.user_exists) {
-          // Аккаунт существует - отправляем SMS код
-          const smsResponse = await authService.sendSMSCode(formData.phone);
-          if (smsResponse.success) {
-            setSmsStep('code');
-            startCountdown();
-          }
-        }
-      } catch (error: any) {
-        // Если аккаунт не найден или другая ошибка
-        setSmsError(error.response?.data?.detail || 'Ошибка проверки номера');
-      }
-    } else if (smsStep === 'code') {
-      if (!smsCode || smsCode.length !== 4) {
-        setSmsError('Введите 4-значный код');
+      
+      if (!formData.password) {
+        setSmsError('Введите пароль');
         return;
       }
 
       try {
-        const result = await authService.verifySMSCode(formData.phone, smsCode);
+        const result = await authService.loginWithPassword(formData.phone, formData.password);
         if (result.user) {
           // Обновляем Redux состояние - токен уже сохранен в authService
           dispatch(clearError());
@@ -190,7 +187,55 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onClose }) =>
           onClose();
         }
       } catch (error: any) {
-        setSmsError(error.response?.data?.detail || 'Неверный код');
+        setSmsError(error.response?.data?.detail || 'Неверный номер телефона или пароль');
+      }
+    } else {
+      // Авторизация через SMS (существующая логика)
+      if (smsStep === 'phone') {
+        if (!formData.phone) {
+          setSmsError('Введите номер телефона');
+          return;
+        }
+
+        try {
+          // Сначала проверяем существование аккаунта
+          const checkResponse = await authService.checkPhoneExists(formData.phone);
+          
+          if (checkResponse.user_exists) {
+            // Аккаунт существует - отправляем SMS код
+            const smsResponse = await authService.sendSMSCode(formData.phone);
+            if (smsResponse.success) {
+              setSmsStep('code');
+              startCountdown();
+            }
+          }
+        } catch (error: any) {
+          // Если аккаунт не найден или другая ошибка
+          setSmsError(error.response?.data?.detail || 'Ошибка проверки номера');
+        }
+      } else if (smsStep === 'code') {
+        if (!smsCode || smsCode.length !== 4) {
+          setSmsError('Введите 4-значный код');
+          return;
+        }
+
+        try {
+          const result = await authService.verifySMSCode(formData.phone, smsCode);
+          if (result.user) {
+            // Обновляем Redux состояние - токен уже сохранен в authService
+            dispatch(clearError());
+            dispatch(setUser(result.user));
+            
+            // Сохраняем аккаунт если выбран чекбокс
+            if (rememberMe) {
+              saveAccountToLocalStorage(result.user, formData.phone);
+            }
+            
+            onClose();
+          }
+        } catch (error: any) {
+          setSmsError(error.response?.data?.detail || 'Неверный код');
+        }
       }
     }
   };
@@ -282,128 +327,199 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onClose }) =>
       )}
 
       <Form onSubmit={handleSubmit}>
-        {smsStep === 'phone' ? (
-          <InputGroup>
-            <InputLabel>Номер телефона</InputLabel>
-            <StyledInput
+        {/* Скрытые поля-ловушки для обмана автозаполнения */}
+        <input type="text" name="username" style={{ display: 'none' }} autoComplete="username" tabIndex={-1} />
+        <input type="password" name="fake-password" style={{ display: 'none' }} autoComplete="current-password" tabIndex={-1} />
+        
+        {/* Поле номера телефона (всегда видимо) */}
+        <InputGroup>
+          <InputLabel>Номер телефона</InputLabel>
+                      <StyledInput
               type="tel"
-              name="phone"
+              name="user-phone-number"
               value={formData.phone}
               onChange={handleInputChange}
               placeholder="+7 (999) 999-99-99"
               required
               disabled={isLoading}
+              autoComplete="new-password"
+              data-form-type="other"
+              readOnly
+              onFocus={(e) => {
+                e.target.removeAttribute('readonly');
+              }}
             />
-            {/* Индикатор статуса проверки номера */}
-            {formData.phone && formData.phone.replace(/\D/g, '').length === 11 && (
-              <PhoneStatusContainer>
-                {isCheckingPhone ? (
-                  <PhoneStatusChecking>
-                    <Spinner style={{ width: '16px', height: '16px' }} />
-                    Проверяем номер...
-                  </PhoneStatusChecking>
-                ) : phoneCheckResult?.exists ? (
-                  <PhoneStatusSuccess>
-                    <UserFoundCard
-                      initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      transition={{ 
-                        type: "spring", 
-                        stiffness: 200, 
-                        damping: 20,
-                        duration: 0.4 
-                      }}
-                    >
-                      <UserAvatar>
-                        {phoneCheckResult.userAvatar ? (
-                          <AvatarImage 
-                            src={`${import.meta.env.VITE_APP_API_URL || 'http://localhost:8000'}${phoneCheckResult.userAvatar}`}
-                            alt={phoneCheckResult.userName || 'Пользователь'}
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                              const placeholder = target.nextElementSibling as HTMLElement;
-                              if (placeholder) {
-                                placeholder.style.display = 'flex';
-                              }
-                            }}
-                          />
-                        ) : null}
-                        <AvatarPlaceholder style={{ display: phoneCheckResult.userAvatar ? 'none' : 'flex' }}>
-                          {(phoneCheckResult.userName || 'У').charAt(0).toUpperCase()}
-                        </AvatarPlaceholder>
-                      </UserAvatar>
-                      <UserInfo>
-                        <UserFoundText>Найден аккаунт</UserFoundText>
-                        <UserName>{phoneCheckResult.userName}</UserName>
-                      </UserInfo>
-                      <CheckIcon>✓</CheckIcon>
-                    </UserFoundCard>
-                  </PhoneStatusSuccess>
-                ) : phoneCheckResult?.exists === false ? (
-                  <PhoneStatusError>
-                    ❌ Пользователь не найден. Попробуйте зарегистрироваться
-                  </PhoneStatusError>
-                ) : null}
-              </PhoneStatusContainer>
-            )}
-          </InputGroup>
-        ) : (
-          <>
-            <InputGroup>
-              <InputLabel>
-                SMS код отправлен на {formData.phone}
-                <BackButton 
-                  type="button" 
-                  onClick={() => {
-                    setSmsStep('phone');
-                    setSmsCode('');
-                    setCountdown(0);
-                    setSmsError('');
-                  }}
-                >
-                  Изменить номер
-                </BackButton>
-              </InputLabel>
+          {/* Индикатор статуса проверки номера для SMS режима */}
+          {loginMode === 'sms' && formData.phone && formData.phone.replace(/\D/g, '').length === 11 && (
+            <PhoneStatusContainer>
+              {isCheckingPhone ? (
+                <PhoneStatusChecking>
+                  <Spinner style={{ width: '16px', height: '16px' }} />
+                  Проверяем номер...
+                </PhoneStatusChecking>
+              ) : phoneCheckResult?.exists ? (
+                <PhoneStatusSuccess>
+                  <UserFoundCard
+                    initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={{ 
+                      type: "spring", 
+                      stiffness: 200, 
+                      damping: 20,
+                      duration: 0.4 
+                    }}
+                  >
+                    <UserAvatar>
+                      {phoneCheckResult.userAvatar ? (
+                        <AvatarImage 
+                          src={`${import.meta.env.VITE_APP_API_URL || 'http://localhost:8000'}${phoneCheckResult.userAvatar}`}
+                          alt={phoneCheckResult.userName || 'Пользователь'}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const placeholder = target.nextElementSibling as HTMLElement;
+                            if (placeholder) {
+                              placeholder.style.display = 'flex';
+                            }
+                          }}
+                        />
+                      ) : null}
+                      <AvatarPlaceholder style={{ display: phoneCheckResult.userAvatar ? 'none' : 'flex' }}>
+                        {(phoneCheckResult.userName || 'У').charAt(0).toUpperCase()}
+                      </AvatarPlaceholder>
+                    </UserAvatar>
+                    <UserInfo>
+                      <UserFoundText>Найден аккаунт</UserFoundText>
+                      <UserName>{phoneCheckResult.userName}</UserName>
+                    </UserInfo>
+                    <CheckIcon>✓</CheckIcon>
+                  </UserFoundCard>
+                </PhoneStatusSuccess>
+              ) : phoneCheckResult?.exists === false ? (
+                <PhoneStatusError>
+                  ❌ Пользователь не найден. Попробуйте зарегистрироваться
+                </PhoneStatusError>
+              ) : null}
+            </PhoneStatusContainer>
+          )}
+        </InputGroup>
+
+        {/* Поле пароля (только в режиме пароля) */}
+        {loginMode === 'password' && (
+          <InputGroup>
+            <InputLabel>Пароль</InputLabel>
+            <PasswordContainer>
               <StyledInput
-                type="text"
-                name="smsCode"
-                value={smsCode}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '').slice(0, 4);
-                  setSmsCode(value);
-                }}
-                placeholder="Введите 4-значный код"
-                maxLength={4}
+                type={showPassword ? 'text' : 'password'}
+                name="user-auth-password"
+                value={formData.password}
+                onChange={handleInputChange}
+                placeholder="Введите пароль"
                 required
                 disabled={isLoading}
-                autoFocus
+                autoComplete="new-password"
+                data-form-type="other"
+                readOnly
+                onFocus={(e) => {
+                  e.target.removeAttribute('readonly');
+                }}
               />
-              {countdown > 0 ? (
-                <CountdownText>
-                  Запросить новый код можно через {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
-                </CountdownText>
-              ) : (
-                <ResendButton
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      setSmsError('');
-                      const response = await authService.sendSMSCode(formData.phone);
-                      if (response.success) {
-                        setSmsCode('');
-                        startCountdown();
-                      }
-                    } catch (error: any) {
-                      setSmsError(error.response?.data?.detail || 'Ошибка отправки SMS');
+              <PasswordToggle
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                disabled={isLoading}
+              >
+                                 {showPassword ? 'Скрыть' : 'Показать'}
+              </PasswordToggle>
+            </PasswordContainer>
+          </InputGroup>
+        )}
+
+        {/* SMS код (только в SMS режиме и на втором шаге) */}
+        {loginMode === 'sms' && smsStep === 'code' && (
+          <InputGroup>
+            <InputLabel>
+              SMS код отправлен на {formData.phone}
+              <BackButton 
+                type="button" 
+                onClick={() => {
+                  setSmsStep('phone');
+                  setSmsCode('');
+                  setCountdown(0);
+                  setSmsError('');
+                }}
+              >
+                Изменить номер
+              </BackButton>
+            </InputLabel>
+            <StyledInput
+              type="text"
+              name="smsCode"
+              value={smsCode}
+              onChange={(e) => {
+                const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                setSmsCode(value);
+              }}
+              placeholder="Введите 4-значный код"
+              maxLength={4}
+              required
+              disabled={isLoading}
+              autoFocus
+            />
+            {countdown > 0 ? (
+              <CountdownText>
+                Запросить новый код можно через {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
+              </CountdownText>
+            ) : (
+              <ResendButton
+                type="button"
+                onClick={async () => {
+                  try {
+                    setSmsError('');
+                    const response = await authService.sendSMSCode(formData.phone);
+                    if (response.success) {
+                      setSmsCode('');
+                      startCountdown();
                     }
-                  }}
-                >
-                  📱 Отправить новый код
-                </ResendButton>
-              )}
-            </InputGroup>
-          </>
+                  } catch (error: any) {
+                    setSmsError(error.response?.data?.detail || 'Ошибка отправки SMS');
+                  }
+                }}
+              >
+                📱 Отправить новый код
+              </ResendButton>
+            )}
+          </InputGroup>
+        )}
+
+        {/* Кнопка "Войти через пароль" */}
+        {loginMode === 'sms' && smsStep === 'phone' && (
+          <PasswordModeButton
+            type="button"
+            onClick={() => {
+              setLoginMode('password');
+              setSmsError('');
+              setPhoneCheckResult(null);
+            }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            Войти через пароль
+          </PasswordModeButton>
+        )}
+
+        {/* Кнопка "Назад к SMS" */}
+        {loginMode === 'password' && (
+          <BackToSMSButton
+            type="button"
+            onClick={() => {
+              setLoginMode('sms');
+              setSmsError('');
+              setFormData(prev => ({ ...prev, password: '' }));
+            }}
+          >
+            ← Назад к SMS коду
+          </BackToSMSButton>
         )}
 
         {/* Чекбокс "Сохранить вход" */}
@@ -431,8 +547,9 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onClose }) =>
           disabled={
             isLoading || 
             isCheckingPhone ||
-            (smsStep === 'phone' && (!formData.phone || !phoneCheckResult?.exists)) || 
-            (smsStep === 'code' && smsCode.length !== 4)
+            (loginMode === 'password' && (!formData.phone || !formData.password)) ||
+            (loginMode === 'sms' && smsStep === 'phone' && (!formData.phone || !phoneCheckResult?.exists)) || 
+            (loginMode === 'sms' && smsStep === 'code' && smsCode.length !== 4)
           }
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
@@ -440,7 +557,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onClose }) =>
           {isLoading ? (
             <>
               <Spinner />
-              {smsStep === 'phone' ? 'Отправка SMS...' : 'Проверка кода...'}
+              {loginMode === 'password' ? 'Вход...' : (smsStep === 'phone' ? 'Отправка SMS...' : 'Проверка кода...')}
             </>
           ) : isCheckingPhone ? (
             <>
@@ -448,7 +565,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onClose }) =>
               Проверка номера...
             </>
           ) : (
-            smsStep === 'phone' ? 'Отправить SMS код' : 'Подтвердить код'
+            loginMode === 'password' ? 'Войти' : (smsStep === 'phone' ? 'Отправить SMS код' : 'Подтвердить код')
           )}
         </SubmitButton>
       </Form>
@@ -511,6 +628,12 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onClose }) =>
             Зарегистрироваться
           </FooterLink>
         </FooterText>
+        <FooterDivider>•</FooterDivider>
+        <FooterText>
+          <FooterLink onClick={onForgotPassword}>
+            Забыл пароль
+          </FooterLink>
+        </FooterText>
       </FormFooter>
     </FormContainer>
   );
@@ -553,13 +676,17 @@ const FormContainer = styled(motion.div)`
   }
   
   @media (max-width: 480px) {
-    padding: 20px 16px;
+    padding: 12px 8px;
     margin: 0;
     max-width: 100vw;
     width: 100vw;
     height: 100vh;
     border-radius: 0;
     border: none;
+  }
+  
+  @media (max-width: 360px) {
+    padding: 12px 10px;
   }
 
   /* Добавляем тонкий светящийся эффект по краям */
@@ -609,7 +736,11 @@ const FormHeader = styled.div`
   }
   
   @media (max-width: 480px) {
-    margin-bottom: 20px;
+    margin-bottom: 12px;
+  }
+  
+  @media (max-width: 360px) {
+    margin-bottom: 12px;
   }
 `;
 
@@ -631,8 +762,13 @@ const FormTitle = styled.h2`
   }
   
   @media (max-width: 480px) {
-    font-size: 22px;
-    margin: 0 0 6px 0;
+    font-size: 18px;
+    margin: 0 0 4px 0;
+  }
+  
+  @media (max-width: 360px) {
+    font-size: 18px;
+    margin: 0 0 4px 0;
   }
 `;
 
@@ -693,7 +829,11 @@ const Form = styled.form`
   }
   
   @media (max-width: 480px) {
-    gap: 18px;
+    gap: 12px;
+  }
+  
+  @media (max-width: 360px) {
+    gap: 10px;
   }
 `;
 
@@ -703,7 +843,7 @@ const InputGroup = styled.div`
   gap: 10px;
   
   @media (max-width: 480px) {
-    gap: 8px;
+    gap: 6px;
   }
 `;
 
@@ -721,8 +861,8 @@ const InputLabel = styled.label`
   }
   
   @media (max-width: 480px) {
-    font-size: 13px;
-    margin-bottom: 2px;
+    font-size: 12px;
+    margin-bottom: 1px;
   }
 `;
 
@@ -759,9 +899,14 @@ const StyledInput = styled.input`
   }
   
   @media (max-width: 480px) {
-    padding: 14px 18px;
+    padding: 10px 14px;
     font-size: 16px; /* Оставляем 16px для предотвращения зума на iOS */
-    border-radius: 14px;
+    border-radius: 10px;
+  }
+  
+  @media (max-width: 360px) {
+    padding: 10px 14px;
+    border-radius: 10px;
   }
 
   &::placeholder {
@@ -826,38 +971,33 @@ const PasswordToggle = styled.button`
   transform: translateY(-50%);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  color: rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
-  padding: 6px;
+  padding: 4px 8px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  font-size: 11px;
+  font-weight: 500;
   backdrop-filter: blur(10px);
+  white-space: nowrap;
 
   &:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.15);
     border-color: rgba(255, 255, 255, 0.25);
     color: rgba(255, 255, 255, 0.9);
-    transform: translateY(-50%) scale(1.05);
+    transform: translateY(-50%) scale(1.02);
   }
 
   &:active:not(:disabled) {
-    transform: translateY(-50%) scale(0.95);
+    transform: translateY(-50%) scale(0.98);
   }
 
   &:disabled {
     opacity: 0.4;
     cursor: not-allowed;
-  }
-
-  svg {
-    width: 16px;
-    height: 16px;
-    transition: all 0.2s ease;
   }
 `;
 
@@ -899,11 +1039,19 @@ const SubmitButton = styled(motion.button)`
   }
   
   @media (max-width: 480px) {
-    padding: 14px 20px;
-    font-size: 15px;
-    border-radius: 14px;
-    margin-top: 8px;
-    min-height: 48px; /* Минимальная высота для удобного нажатия */
+    padding: 10px 16px;
+    font-size: 13px;
+    border-radius: 10px;
+    margin-top: 6px;
+    min-height: 40px; /* Минимальная высота для удобного нажатия */
+  }
+  
+  @media (max-width: 360px) {
+    padding: 10px 16px;
+    font-size: 13px;
+    border-radius: 10px;
+    margin-top: 6px;
+    min-height: 40px;
   }
 
   &::before {
@@ -987,8 +1135,6 @@ const Spinner = styled.div`
   }
 `;
 
-
-
 const SocialSection = styled.div`
   display: flex;
   flex-direction: column;
@@ -1059,7 +1205,7 @@ const SocialButtons = styled.div`
   }
   
   @media (max-width: 480px) {
-    gap: 16px;
+    gap: 12px;
   }
 `;
 
@@ -1092,8 +1238,8 @@ const SocialIconButton = styled(motion.button)<{ $bgColor: string; $textColor?: 
   }
   
   @media (max-width: 480px) {
-    width: 52px;
-    height: 52px;
+    width: 46px;
+    height: 46px;
   }
 
   img {
@@ -1107,8 +1253,8 @@ const SocialIconButton = styled(motion.button)<{ $bgColor: string; $textColor?: 
     }
     
     @media (max-width: 480px) {
-      width: 32px !important;
-      height: 32px !important;
+      width: 28px !important;
+      height: 28px !important;
     }
   }
 
@@ -1158,9 +1304,12 @@ const SocialIconButton = styled(motion.button)<{ $bgColor: string; $textColor?: 
   }
 `;
 
-
-
 const FormFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
   text-align: center;
   margin-top: 24px;
   
@@ -1169,7 +1318,9 @@ const FormFooter = styled.div`
   }
   
   @media (max-width: 480px) {
-    margin-top: 16px;
+    margin-top: 12px;
+    flex-direction: column;
+    gap: 6px;
   }
 `;
 
@@ -1207,6 +1358,22 @@ const FooterLink = styled.button`
 
   &:hover {
     color: #0056CC;
+  }
+`;
+
+const FooterDivider = styled.span`
+  color: #86868B;
+  font-size: 14px;
+  margin: 0 12px;
+  
+  @media (max-width: 768px) {
+    font-size: 13px;
+    margin: 0 10px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 12px;
+    margin: 0 8px;
   }
 `;
 
@@ -1373,7 +1540,7 @@ const RememberMeContainer = styled.div`
   }
   
   @media (max-width: 480px) {
-    margin: 12px 0 4px 0;
+    margin: 8px 0 2px 0;
   }
 `;
 
@@ -1388,7 +1555,7 @@ const RememberMeCheckbox = styled.div`
   }
   
   @media (max-width: 480px) {
-    gap: 8px;
+    gap: 6px;
   }
 `;
 
@@ -1427,9 +1594,9 @@ const CheckboxCustom = styled.div<{ $checked: boolean }>`
   }
   
   @media (max-width: 480px) {
-    width: 16px;
-    height: 16px;
-    border-radius: 4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
   }
 
   &:hover {
@@ -1457,7 +1624,7 @@ const CheckboxIcon = styled.div`
   }
   
   @media (max-width: 480px) {
-    font-size: 10px;
+    font-size: 9px;
   }
 `;
 
@@ -1474,7 +1641,7 @@ const CheckboxLabel = styled.label`
   }
   
   @media (max-width: 480px) {
-    font-size: 12px;
+    font-size: 11px;
   }
 
   &:hover {
@@ -1688,6 +1855,105 @@ const PhoneStatusError = styled.div`
   
   /* Добавляем легкое свечение */
   box-shadow: 0 2px 8px rgba(244, 67, 54, 0.2);
+`;
+
+const PasswordContainer = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+`;
+
+const PasswordModeButton = styled(motion.button)`
+  width: 100%;
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.9);
+    transform: translateY(-0.5px);
+  }
+  
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 7px 14px;
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 6px 12px;
+    font-size: 11px;
+    margin-bottom: 8px;
+  }
+`;
+
+const BackToSMSButton = styled.button`
+  width: 100%;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.8);
+    transform: translateY(-0.5px);
+  }
+  
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  @media (max-width: 768px) {
+    font-size: 12px;
+    padding: 8px 14px;
+    margin-bottom: 14px;
+    gap: 4px;
+  }
+  
+  @media (max-width: 480px) {
+    font-size: 11px;
+    padding: 6px 12px;
+    margin-bottom: 12px;
+    gap: 3px;
+  }
 `;
 
 export default LoginForm; 

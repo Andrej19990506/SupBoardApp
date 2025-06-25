@@ -582,7 +582,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin, onClose })
                     onClick={() => setShowPassword(!showPassword)}
                     disabled={isLoading}
                   >
-                    {showPassword ? '👁️‍🗨️' : '👁️'}
+                    {showPassword ? 'Скрыть' : 'Показать'}
                   </PasswordToggle>
                 </PasswordContainer>
                 {validationErrors.password && (
@@ -608,7 +608,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSwitchToLogin, onClose })
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     disabled={isLoading}
                   >
-                    {showConfirmPassword ? '👁️‍🗨️' : '👁️'}
+                    {showConfirmPassword ? 'Скрыть' : 'Показать'}
                   </PasswordToggle>
                 </PasswordContainer>
                 {validationErrors.confirmPassword && (
@@ -996,47 +996,44 @@ const PasswordToggle = styled.button`
   transform: translateY(-50%);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  color: rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
-  padding: 6px;
+  padding: 4px 8px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  font-size: 11px;
+  font-weight: 500;
   backdrop-filter: blur(10px);
+  white-space: nowrap;
   
   @media (max-width: 768px) {
     right: 14px;
-    width: 30px;
-    height: 30px;
-    padding: 5px;
-    border-radius: 7px;
+    padding: 3px 6px;
+    font-size: 10px;
   }
   
   @media (max-width: 480px) {
     right: 12px;
-    width: 28px;
-    height: 28px;
-    padding: 4px;
-    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 10px;
   }
 
   &:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.15);
     border-color: rgba(255, 255, 255, 0.25);
     color: rgba(255, 255, 255, 0.9);
-    transform: translateY(-50%) scale(1.05);
+    transform: translateY(-50%) scale(1.02);
     
     @media (max-width: 480px) {
-      transform: translateY(-50%); /* Убираем scale на мобильных */
+      transform: translateY(-50%);
     }
   }
 
   &:active:not(:disabled) {
-    transform: translateY(-50%) scale(0.95);
+    transform: translateY(-50%) scale(0.98);
     
     @media (max-width: 480px) {
       transform: translateY(-50%);
@@ -1046,22 +1043,6 @@ const PasswordToggle = styled.button`
   &:disabled {
     opacity: 0.4;
     cursor: not-allowed;
-  }
-
-  svg {
-    width: 16px;
-    height: 16px;
-    transition: all 0.2s ease;
-    
-    @media (max-width: 768px) {
-      width: 15px;
-      height: 15px;
-    }
-    
-    @media (max-width: 480px) {
-      width: 14px;
-      height: 14px;
-    }
   }
 `;
 

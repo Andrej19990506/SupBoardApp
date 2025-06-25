@@ -1387,58 +1387,95 @@ async def register_user(
 @router.post("/login")
 async def login_user(
     login_data: LoginRequest,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db_session)
 ):
     """
     Вход пользователя по номеру телефона и паролю
     """
     try:
-        # Ищем пользователя по номеру телефона
-        existing_client = await user_crud.get_user_by_phone(db, phone=login_data.phone)
+        logger.info(f"🔐 Попытка входа через пароль: {login_data.phone}")
         
-        if not existing_client:
+        # Аутентификация пользователя с проверкой пароля
+        user = await user_crud.authenticate_user(db, login_data.phone, login_data.password)
+        
+        if not user:
+            logger.warning(f"❌ Неудачная попытка входа: {login_data.phone}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Неверный номер телефона или пароль"
             )
         
-        # В реальном приложении здесь должна быть проверка пароля
-        # Пока что просто возвращаем пользователя
+        logger.info(f"✅ Успешная аутентификация: {user.name} (ID: {user.id})")
         
-        # Генерируем токены
-        access_token = f"phone_token_{existing_client.id}_{int(datetime.now().timestamp())}"
-        refresh_token = f"refresh_{existing_client.id}_{int(datetime.now().timestamp())}"
+        # 🛡️ ГЕНЕРИРУЕМ DEVICE FINGERPRINT
+        device_fingerprints = security_service.generate_flexible_fingerprint(request)
+        device_fingerprint = device_fingerprints["strict"]
+        ip_address = security_service.get_client_ip(request)
+        user_agent = request.headers.get("user-agent", "")
+        
+        # 🛡️ СОЗДАЕМ НОВУЮ SECURE SESSION
+        refresh_token = security_service.generate_secure_token(32)
+        device_session = await security_service.device_session_crud.create_session(
+            db,
+            user_id=user.id,
+            device_fingerprint=device_fingerprint,
+            refresh_token=refresh_token,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            expires_hours=168  # 7 дней
+        )
+        logger.info(f"✅ [login] Создана новая сессия: ID={device_session.id}")
+        
+        # 🍪 УСТАНАВЛИВАЕМ HTTPONLY COOKIE с refresh token
+        security_service.set_refresh_token_cookie(response, refresh_token)
+        logger.info(f"✅ [login] HttpOnly cookie установлен")
+        
+        # Обновляем информацию о входе
+        await user_crud.update_login_info(
+            db, user.id, ip_address, user_agent, device_fingerprint
+        )
+        
+        # Генерируем JWT access token
+        access_token_data = {
+            "sub": str(user.id),
+            "phone": user.phone,
+            "name": user.name,
+            "provider": "password"
+        }
+        access_token = create_access_token(data=access_token_data)
         
         # Формируем ответ
         user_data = {
-            "id": str(existing_client.id),
-            "name": existing_client.name,
-            "email": login_data.phone,  # Временно используем телефон как email
-            "avatar": None,
+            "id": str(user.id),
+            "name": user.name,
+            "email": user.email,
+            "avatar": user.avatar,
             "role": "user",
-            "provider": "phone",
+            "provider": "password",
             "providerId": None,
-            "createdAt": existing_client.created_at.isoformat() if existing_client.created_at else "",
-            "updatedAt": existing_client.updated_at.isoformat() if existing_client.updated_at else ""
+            "createdAt": user.created_at.isoformat() if user.created_at else "",
+            "updatedAt": user.updated_at.isoformat() if user.updated_at else ""
         }
         
-        print(f"User logged in: {user_data}")
+        logger.info(f"✅ Пользователь вошел через пароль: {user_data['name']}")
         
         return {
             "user": user_data,
             "token": access_token,
-            "refreshToken": refresh_token
+            "refreshToken": refresh_token  # Оставляем в ответе для совместимости
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Exception in user login: {str(e)}")
+        logger.error(f"❌ Ошибка входа через пароль: {str(e)}")
         import traceback
-        print(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"❌ Полная трассировка: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Внутренняя ошибка сервера при входе: {str(e)}"
+            detail="Внутренняя ошибка сервера при входе"
         )
 
 @router.post("/send-registration-sms-code")
@@ -1998,3 +2035,109 @@ async def soft_logout_user(
             samesite="lax"
         )
         return {"message": "Выход выполнен с ошибкой"}
+
+@router.post("/debug-device-fingerprint")
+async def debug_device_fingerprint(
+    request: Request,
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    🔍 ДИАГНОСТИЧЕСКИЙ ENDPOINT - анализирует device fingerprint и сессии
+    """
+    try:
+        # Генерируем все типы fingerprint
+        device_fingerprints = security_service.generate_flexible_fingerprint(request)
+        ip_address = security_service.get_client_ip(request)
+        user_agent = request.headers.get("user-agent", "")
+        
+        # Ищем все сессии с таким же fingerprint
+        from crud.device_session import CRUDDeviceSession
+        device_crud = CRUDDeviceSession()
+        
+        # Ищем ВСЕ сессии по loose fingerprint (включая неактивные)
+        all_sessions = await device_crud.get_sessions_by_fingerprint(
+            db, device_fingerprints["loose"], include_inactive=True
+        )
+        active_sessions = await device_crud.get_sessions_by_fingerprint(
+            db, device_fingerprints["loose"], include_inactive=False
+        )
+        
+        # Получаем refresh token из cookie
+        refresh_token = request.cookies.get("refresh_token")
+        
+        # Группируем по пользователям
+        sessions_by_user = {}
+        for session in all_sessions:
+            user_id = session.user_id
+            if user_id not in sessions_by_user:
+                sessions_by_user[user_id] = []
+            
+            # Проверяем, совпадает ли refresh token
+            token_matches = False
+            if refresh_token and session.refresh_token_hash:
+                import bcrypt
+                try:
+                    token_matches = bcrypt.checkpw(
+                        refresh_token.encode('utf-8'), 
+                        session.refresh_token_hash.encode('utf-8')
+                    )
+                except:
+                    token_matches = False
+            
+            sessions_by_user[user_id].append({
+                "session_id": session.id,
+                "is_active": session.is_active,
+                "created_at": session.created_at.isoformat() if session.created_at else None,
+                "last_used_at": session.last_used_at.isoformat() if session.last_used_at else None,
+                "expires_at": session.expires_at.isoformat() if session.expires_at else None,
+                "browser": session.browser_name,
+                "os": session.os_name,
+                "device_type": session.device_type,
+                "refresh_token_hash": session.refresh_token_hash[:10] + "..." if session.refresh_token_hash else None,
+                "current_refresh_token_matches": token_matches
+            })
+        
+        # Получаем информации о пользователях
+        users_info = {}
+        for user_id in sessions_by_user.keys():
+            user = await user_crud.get_user(db, user_id)
+            if user:
+                users_info[user_id] = {
+                    "name": user.name,
+                    "phone": user.phone,
+                    "email": user.email
+                }
+        
+        return {
+            "current_request": {
+                "ip_address": ip_address,
+                "user_agent": user_agent,
+                "fingerprints": {
+                    "strict": device_fingerprints["strict"][:16] + "...",
+                    "loose": device_fingerprints["loose"][:16] + "...", 
+                    "very_loose": device_fingerprints["very_loose"][:16] + "..."
+                },
+                "has_refresh_token": bool(refresh_token),
+                "refresh_token_preview": refresh_token[:10] + "..." if refresh_token else None
+            },
+            "sessions_analysis": {
+                "total_sessions_all": len(all_sessions),
+                "total_sessions_active": len(active_sessions),
+                "unique_users_count": len(sessions_by_user),
+                "sessions_by_user": sessions_by_user,
+                "users_info": users_info
+            },
+            "problem_analysis": {
+                "multiple_users_same_device": len(sessions_by_user) > 1,
+                "sessions_deactivated": len(all_sessions) > len(active_sessions),
+                "explanation": "Если multiple_users_same_device = true и sessions_deactivated = true, то при входе нового пользователя старые сессии деактивируются"
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка диагностики device fingerprint: {e}")
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }

@@ -89,12 +89,41 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
 
+    # --- Настройки Email SMTP ---
+    SMTP_SERVER: str = os.getenv("SMTP_SERVER", "smtp.yandex.ru")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", 587))
+    SMTP_USERNAME: str = os.getenv("SMTP_USERNAME", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    FROM_EMAIL: str = os.getenv("FROM_EMAIL", "noreply@supboardapp.ru")
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "https://supboardapp.ru")
+
     class Config:
         case_sensitive = True
 
 
 # Создаем экземпляр настроек для импорта в других модулях
 settings = Settings()
+
+# Логируем SMTP настройки при загрузке конфигурации
+import logging
+logger = logging.getLogger(__name__)
+
+# Используем print для гарантированного вывода на этапе загрузки
+print("🔧 [CONFIG] Загружены SMTP настройки:")
+print(f"📧 [CONFIG] SMTP_SERVER: {settings.SMTP_SERVER}")
+print(f"🔌 [CONFIG] SMTP_PORT: {settings.SMTP_PORT}")
+print(f"👤 [CONFIG] SMTP_USERNAME: {settings.SMTP_USERNAME}")
+print(f"🔑 [CONFIG] SMTP_PASSWORD: {'установлен' if settings.SMTP_PASSWORD else 'НЕ УСТАНОВЛЕН'}")
+print(f"📤 [CONFIG] FROM_EMAIL: {settings.FROM_EMAIL}")
+print(f"🌐 [CONFIG] FRONTEND_URL: {settings.FRONTEND_URL}")
+
+logger.info("🔧 Загружены SMTP настройки:")
+logger.info(f"📧 SMTP_SERVER: {settings.SMTP_SERVER}")
+logger.info(f"🔌 SMTP_PORT: {settings.SMTP_PORT}")
+logger.info(f"👤 SMTP_USERNAME: {settings.SMTP_USERNAME}")
+logger.info(f"🔑 SMTP_PASSWORD: {'установлен' if settings.SMTP_PASSWORD else 'НЕ УСТАНОВЛЕН'}")
+logger.info(f"📤 FROM_EMAIL: {settings.FROM_EMAIL}")
+logger.info(f"🌐 FRONTEND_URL: {settings.FRONTEND_URL}")
 
 def get_settings() -> Settings:
     """Функция для получения настроек (для dependency injection)"""

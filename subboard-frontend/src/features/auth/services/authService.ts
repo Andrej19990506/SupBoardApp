@@ -106,6 +106,20 @@ class AuthService {
     return authData;
   }
 
+  // Вход через пароль (новый метод)
+  async loginWithPassword(phone: string, password: string): Promise<AuthResponse> {
+    const response = await api.post('/v1/auth/login', {
+      phone: phone,
+      password: password
+    });
+    const authData = response.data;
+    
+    this.setTokens(authData.token, authData.refreshToken);
+    this.setStoredUser(authData.user);
+    
+    return authData;
+  }
+
   // Выход
   async logout(): Promise<void> {
     try {
@@ -325,13 +339,32 @@ class AuthService {
     return response.data;
   }
 
-  // Сброс пароля
-  async requestPasswordReset(email: string): Promise<void> {
-    await api.post('/v1/auth/password-reset/request', { email });
+  // Восстановление пароля - отправка SMS кода
+  async forgotPassword(phone: string): Promise<{ success: boolean; message: string; expires_in: number }> {
+    const response = await api.post('/v1/auth/forgot-password', { phone });
+    return response.data;
   }
 
-  async resetPassword(token: string, newPassword: string): Promise<void> {
-    await api.post('/v1/auth/password-reset/confirm', { token, newPassword });
+  // Проверка SMS кода для восстановления пароля
+  async verifyResetCode(phone: string, code: string): Promise<{ success: boolean; message: string; reset_token?: string }> {
+    const response = await api.post('/v1/auth/verify-reset-code', { phone, code });
+    return response.data;
+  }
+
+  // Установка нового пароля
+  async resetPassword(phone: string, resetToken: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.post('/v1/auth/reset-password', { 
+      phone, 
+      reset_token: resetToken, 
+      new_password: newPassword 
+    });
+    return response.data;
+  }
+
+  // Альтернативное восстановление через email + номер при регистрации
+  async emailFallbackRecovery(email: string, phone: string): Promise<{ success: boolean; message: string; method?: string }> {
+    const response = await api.post('/v1/auth/email-fallback', { email, phone });
+    return response.data;
   }
 
   // Управление аватарами

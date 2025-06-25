@@ -244,6 +244,23 @@ class CRUDDeviceSession:
         
         return hashlib.sha256(fingerprint_data.encode()).hexdigest()
 
+    async def get_sessions_by_fingerprint(
+        self,
+        db: AsyncSession,
+        device_fingerprint: str,
+        include_inactive: bool = False
+    ) -> List[DeviceSession]:
+        """Находит все сессии с указанным device fingerprint"""
+        query = select(DeviceSession).where(DeviceSession.device_fingerprint == device_fingerprint)
+        
+        if not include_inactive:
+            query = query.where(DeviceSession.is_active == True)
+            
+        query = query.order_by(DeviceSession.created_at.desc())
+        
+        result = await db.execute(query)
+        return result.scalars().all()
+
 
 # Создаем глобальный экземпляр CRUD
 device_session_crud = CRUDDeviceSession() 

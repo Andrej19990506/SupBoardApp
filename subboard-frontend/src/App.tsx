@@ -11,10 +11,7 @@ import {
     deleteBooking,
 } from '@features/booking/store/slices/bookings-slice/bookingsSlice';
 import { addBooking, updateBookingAsync } from '@features/booking/store/slices/bookings-slice/bookingsThunk';
-// import { fetchBoards } from '@features/booking/store/slices/board-slice/boardThunk'; // Больше не используется
-import { fetchSeats } from '@features/booking/store/slices/seat-slice/seatThunk';
 import { fetchBookings } from '@features/booking/store/slices/bookings-slice/bookingsThunk';
-import { fetchBoardBookings } from '@features/booking/store/slices/board-bookings/boardBookingsThunks';
 import { fetchDaysAvailability } from '@features/booking/store/slices/bookings-slice/bookingsThunk';
 import type { Booking } from '@/types/booking';
 import type { RootState } from '@features/booking/store/types';
@@ -321,9 +318,9 @@ const App: FC = () => {
         <ThemeProvider theme={theme}>
             <Provider store={store}>
                 <ProfileDropdownProvider>
-                    <AuthGuard>
-                        <AppContent />
-                    </AuthGuard>
+            <AuthGuard>
+                <AppContent />
+            </AuthGuard>
                 </ProfileDropdownProvider>
             </Provider>
         </ThemeProvider>

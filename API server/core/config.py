@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
 
+    # --- Настройки VK OAuth ---
+    VK_CLIENT_ID: str = os.getenv("VK_CLIENT_ID", "")
+    VK_CLIENT_SECRET: str = os.getenv("VK_CLIENT_SECRET", "")
+
     # --- Настройки Email SMTP ---
     SMTP_SERVER: str = os.getenv("SMTP_SERVER", "smtp.yandex.ru")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", 587))

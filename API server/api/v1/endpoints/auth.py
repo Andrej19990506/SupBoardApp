@@ -876,6 +876,9 @@ async def authenticate_google(
                 detail="Отсутствует код авторизации Google"
             )
         
+        # Определяем redirect_uri для Google OAuth
+        redirect_uri = "https://supboardapp.ru/auth/google/callback"
+        
         # Google OAuth требует client_secret для обмена кода на токен
         token_url = "https://oauth2.googleapis.com/token"
         token_data = {

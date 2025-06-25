@@ -264,21 +264,46 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onForgotPassw
     }
   };
 
-  const handleVKAuth = (userData: any) => {
-    dispatch(authenticateWithVK(userData));
-    onClose();
+  const handleVKAuth = () => {
+    // VK авторизация через перенаправление
+    try {
+      const vkAuthUrl = authService.getVKAuthUrl();
+      window.location.href = vkAuthUrl;
+    } catch (error) {
+      console.error('VK auth error:', error);
+      // Показываем ошибку пользователю
+      alert('VK авторизация недоступна. Проверьте настройки.');
+    }
   };
 
-  const handleTelegramLogin = async (user: TelegramUser) => {
-    try {
-      console.log('Telegram user data:', user);
-      const result = await dispatch(authenticateWithTelegram(user));
-      if (authenticateWithTelegram.fulfilled.match(result)) {
-        onClose();
+  const handleTelegramAuth = () => {
+    // Создаем Telegram Login Widget динамически
+    const script = document.createElement('script');
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.async = true;
+    script.setAttribute('data-telegram-login', 'SubBoardAuthBot');
+    script.setAttribute('data-size', 'large');
+    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+    script.setAttribute('data-request-access', 'write');
+
+    // Создаем глобальную функцию для callback
+    (window as any).onTelegramAuth = async (user: TelegramUser) => {
+      console.log('Telegram auth success:', user);
+      try {
+        const result = await dispatch(authenticateWithTelegram(user));
+        if (authenticateWithTelegram.fulfilled.match(result)) {
+          onClose();
+        }
+      } catch (error) {
+        console.error('Telegram auth error:', error);
       }
-    } catch (error) {
-      console.error('Telegram auth error:', error);
-    }
+    };
+
+    // Добавляем скрипт на страницу
+    document.head.appendChild(script);
+    
+    // Показываем уведомление пользователю
+    console.log('Telegram Login Widget загружается...');
   };
 
   const handleGoogleLogin = () => {
@@ -579,8 +604,8 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onForgotPassw
         <SocialButtons>
           <SocialIconButton
             onClick={() => {
-              // VK логика будет здесь
-              console.log('VK auth');
+              // VK авторизация
+              handleVKAuth();
             }}
             whileHover={{ 
               scale: 1.05,
@@ -594,8 +619,8 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onForgotPassw
 
           <SocialIconButton
             onClick={() => {
-              // Telegram логика будет здесь
-              console.log('Telegram auth');
+              // Создаем Telegram Login Widget динамически
+              handleTelegramAuth();
             }}
             whileHover={{ 
               scale: 1.05,

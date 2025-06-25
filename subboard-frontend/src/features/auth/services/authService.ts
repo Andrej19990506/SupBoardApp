@@ -202,7 +202,12 @@ class AuthService {
 
   // OAuth ВКонтакте
   getVKAuthUrl(): string {
-    const clientId = import.meta.env.VITE_VK_CLIENT_ID;
+    const clientId = (window as any).APP_CONFIG?.VK_CLIENT_ID || import.meta.env.VITE_VK_CLIENT_ID;
+    
+    if (!clientId) {
+      throw new Error('VK Client ID не настроен');
+    }
+    
     const redirectUri = `${window.location.origin}/auth/vk/callback`;
     const state = Math.random().toString(36).substring(2, 15);
     

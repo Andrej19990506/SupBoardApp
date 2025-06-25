@@ -21,7 +21,8 @@ const config = {
   WS_URL: process.env.VITE_APP_WS_URL || "ws://localhost/api/ws", 
   ENV: process.env.ENV_TYPE || "development",
   DEBUG: process.env.VITE_APP_DEBUG || "true",
-  APPLICATION_SERVER_KEY: process.env.APPLICATION_SERVER_KEY || "BL9aHxCJHILa-O2H3lShmC3k-E7e8Tb1Krdm-lPeYEjV1PgF38LRS-Q8Ax0naHfu-cA-9W8WOdBlfYMvi3pFj_Q"
+  APPLICATION_SERVER_KEY: process.env.APPLICATION_SERVER_KEY || "BL9aHxCJHILa-O2H3lShmC3k-E7e8Tb1Krdm-lPeYEjV1PgF38LRS-Q8Ax0naHfu-cA-9W8WOdBlfYMvi3pFj_Q",
+  VK_CLIENT_ID: process.env.VK_CLIENT_ID || ""
 };
 
 // Создаем содержимое config.js
@@ -30,7 +31,8 @@ const configContent = `window.APP_CONFIG = {
     WS_URL: "${config.WS_URL}",
     ENV: "${config.ENV}",
     DEBUG: "${config.DEBUG}",
-    APPLICATION_SERVER_KEY: "${config.APPLICATION_SERVER_KEY}"
+    APPLICATION_SERVER_KEY: "${config.APPLICATION_SERVER_KEY}",
+    VK_CLIENT_ID: "${config.VK_CLIENT_ID}"
 };`;
 
 try {

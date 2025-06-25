@@ -18,8 +18,8 @@ WORKDIR /app
 # Копируем только requirements.txt для кеширования слоя Docker
 COPY requirements.txt ./
 
-# <<< ДОБАВЛЯЕМ УСТАНОВКУ curl >>>
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Устанавливаем системные зависимости для PostgreSQL и curl
+RUN apt-get update && apt-get install -y curl libpq-dev && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
@@ -49,8 +49,8 @@ ENV PIP_NO_CACHE_DIR=off
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Устанавливаем системные зависимости
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Устанавливаем системные зависимости для PostgreSQL и curl
+RUN apt-get update && apt-get install -y curl libpq-dev && rm -rf /var/lib/apt/lists/*
 
 # Копируем и устанавливаем Python зависимости
 COPY requirements.txt ./

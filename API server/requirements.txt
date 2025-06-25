@@ -4,7 +4,7 @@ pydantic
 python-dotenv
 sqlalchemy[asyncio]
 asyncpg
-psycopg2-binary
+psycopg
 greenlet
 pydantic-settings
 alembic

@@ -3,7 +3,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from db.session import get_db_session
 from crud.user import user_crud
-from crud.user import user_crud
 from core.config import settings
 from schemas.customer import CustomerCreate
 from schemas.user import UserCreate
@@ -785,51 +784,51 @@ async def authenticate_telegram(
         short_telegram_id = str(user_id)[-10:]  # Берем последние 10 цифр
         phone = f"+t{short_telegram_id}"  # Временный телефон для Telegram пользователей (макс 12 символов)
         
-        existing_client = await customer_crud.get_client_by_phone(db, phone=phone)
+        existing_user = await user_crud.get_user_by_phone(db, phone=phone)
         
-        if existing_client:
-            # Обновляем данные существующего клиента если они изменились
+        if existing_user:
+            # Обновляем данные существующего пользователя если они изменились
             update_needed = False
-            if existing_client.name != name:
-                existing_client.name = name
+            if existing_user.name != name:
+                existing_user.name = name
                 update_needed = True
             
             # Обновляем аватар если есть
             photo_url = telegram_data.get('photo_url')
-            if photo_url and existing_client.avatar != photo_url:
-                existing_client.avatar = photo_url
+            if photo_url and existing_user.avatar != photo_url:
+                existing_user.avatar = photo_url
                 update_needed = True
             
             if update_needed:
                 await db.commit()
-                await db.refresh(existing_client)
-                print(f"✅ Обновлены данные клиента: {existing_client.name}")
+                await db.refresh(existing_user)
+                print(f"✅ Обновлены данные пользователя: {existing_user.name}")
             
-            client = existing_client
+            user = existing_user
         else:
-            client_data = CustomerCreate(
+            user_data = UserCreate(
                 name=name,
                 phone=phone,
                 avatar=telegram_data.get('photo_url')
             )
-            client = await customer_crud.create_client(db, client_in=client_data)
-            print(f"✅ Создан новый клиент: {client.name}")
+            user = await user_crud.create_user(db, user_in=user_data)
+            print(f"✅ Создан новый пользователь: {user.name}")
         
         # Генерируем токены
-        access_token = f"telegram_token_{client.id}_{int(datetime.now().timestamp())}"
-        refresh_token = f"refresh_{client.id}_{int(datetime.now().timestamp())}"
+        access_token = f"telegram_token_{user.id}_{int(datetime.now().timestamp())}"
+        refresh_token = f"refresh_{user.id}_{int(datetime.now().timestamp())}"
         
         # Формируем ответ
         user_data = {
-            "id": str(client.id),
-            "name": client.name,
-            "email": client.phone,
+            "id": str(user.id),
+            "name": user.name,
+            "email": user.phone,
             "avatar": telegram_data.get('photo_url'),
-            "role": "user",
+            "role": "admin",  # Telegram пользователи - это бизнесмены
             "provider": "telegram",
             "providerId": str(user_id),
-            "createdAt": client.created_at.isoformat() if client.created_at else "",
-            "updatedAt": client.updated_at.isoformat() if client.updated_at else ""
+            "createdAt": user.created_at.isoformat() if user.created_at else "",
+            "updatedAt": user.updated_at.isoformat() if user.updated_at else ""
         }
         
         # 🛡️ УСТАНАВЛИВАЕМ HTTPONLY COOKIE с refresh token
@@ -944,40 +943,41 @@ async def authenticate_google(
         short_google_id = str(google_id)[-10:]  # Берем последние 10 цифр
         phone = f"+g{short_google_id}"  # Временный телефон для Google пользователей (макс 12 символов)
         
-        print(f"Looking for existing client with phone: {phone}")
-        existing_client = await customer_crud.get_client_by_phone(db, phone=phone)
-        print(f"Existing client found: {existing_client is not None}")
+        print(f"Looking for existing user with phone: {phone}")
+        existing_user = await user_crud.get_user_by_phone(db, phone=phone)
+        print(f"Existing user found: {existing_user is not None}")
         
-        if existing_client:
-            client = existing_client
-            print(f"Using existing client: {client.id}")
+        if existing_user:
+            user = existing_user
+            print(f"Using existing user: {user.id}")
         else:
-            print("Creating new client...")
-            client_data = CustomerCreate(
+            print("Creating new user...")
+            user_data = UserCreate(
                 name=name or email.split('@')[0],
-                phone=phone
+                phone=phone,
+                email=email
             )
-            print(f"Client data: {client_data}")
-            client = await customer_crud.create_client(db, client_in=client_data)
-            print(f"Created new client: {client.id}")
+            print(f"User data: {user_data}")
+            user = await user_crud.create_user(db, user_in=user_data)
+            print(f"Created new user: {user.id}")
         
         # Генерируем токены
-        access_token = f"google_token_{client.id}_{int(datetime.now().timestamp())}"
-        refresh_token = f"refresh_{client.id}_{int(datetime.now().timestamp())}"
+        access_token = f"google_token_{user.id}_{int(datetime.now().timestamp())}"
+        refresh_token = f"refresh_{user.id}_{int(datetime.now().timestamp())}"
         
-        print(f"Generated tokens for client {client.id}")
+        print(f"Generated tokens for user {user.id}")
         
         # Формируем ответ
         user_data = {
-            "id": str(client.id),
-            "name": client.name,
+            "id": str(user.id),
+            "name": user.name,
             "email": email,
             "avatar": picture,
-            "role": "user",
+            "role": "admin",  # Google пользователи - это бизнесмены
             "provider": "google",
             "providerId": str(google_id),
-            "createdAt": client.created_at.isoformat() if client.created_at else "",
-            "updatedAt": client.updated_at.isoformat() if client.updated_at else ""
+            "createdAt": user.created_at.isoformat() if user.created_at else "",
+            "updatedAt": user.updated_at.isoformat() if user.updated_at else ""
         }
         
         print(f"Returning user data: {user_data}")
@@ -1114,64 +1114,64 @@ async def authenticate_vk(
             user_phone = f"+v{short_vk_id}"  # Временный телефон для VK пользователей (макс 12 символов)
         
         print(f"Looking for existing VK client with phone: {user_phone}")
-        existing_client = await customer_crud.get_client_by_phone(db, phone=user_phone)
-        print(f"Existing VK client found: {existing_client is not None}")
+        existing_user = await user_crud.get_user_by_phone(db, phone=user_phone)
+        print(f"Existing VK user found: {existing_user is not None}")
         
-        if existing_client:
-            client = existing_client
-            print(f"Using existing VK client: {client.id}")
+        if existing_user:
+            user = existing_user
+            print(f"Using existing VK user: {user.id}")
             # Обновляем данные пользователя если получили новую информацию из VK
             updated = False
-            if avatar and not existing_client.avatar:
-                existing_client.avatar = avatar
+            if avatar and not existing_user.avatar:
+                existing_user.avatar = avatar
                 updated = True
             
             # Обновляем имя если получили реальные данные из VK
-            if name != f"VK User {user_id}" and existing_client.name == f"VK User {user_id}":
-                existing_client.name = name
+            if name != f"VK User {user_id}" and existing_user.name == f"VK User {user_id}":
+                existing_user.name = name
                 updated = True
                 
             # Обновляем email если получили данные из VK
-            if email and not existing_client.email:
-                existing_client.email = email
+            if email and not existing_user.email:
+                existing_user.email = email
                 updated = True
                 
             if updated:
                 await db.commit()
-                await db.refresh(existing_client)
+                await db.refresh(existing_user)
         else:
-            print("Creating new VK client...")
-            client_data = CustomerCreate(
+            print("Creating new VK user...")
+            user_data = UserCreate(
                 name=name,
                 phone=user_phone,
                 email=email,
                 avatar=avatar
             )
-            print(f"VK Client data: {client_data}")
-            client = await customer_crud.create_client(db, client_in=client_data)
-            print(f"Created new VK client: {client.id}")
+            print(f"VK User data: {user_data}")
+            user = await user_crud.create_user(db, user_in=user_data)
+            print(f"Created new VK user: {user.id}")
         
         # Генерируем токены
-        access_token = f"vk_token_{client.id}_{int(datetime.now().timestamp())}"
-        refresh_token = f"refresh_{client.id}_{int(datetime.now().timestamp())}"
+        access_token = f"vk_token_{user.id}_{int(datetime.now().timestamp())}"
+        refresh_token = f"refresh_{user.id}_{int(datetime.now().timestamp())}"
         
-        print(f"Generated tokens for VK client {client.id}")
+        print(f"Generated tokens for VK user {user.id}")
         
         # Обновляем данные в базе
-        await db.refresh(client)
+        await db.refresh(user)
         
         # Формируем ответ
         user_data = {
-            "id": str(client.id),
-            "name": client.name,
-            "email": client.email or email,
-            "phone": client.phone,
-            "avatar": client.avatar or avatar,
-            "role": "user",
+            "id": str(user.id),
+            "name": user.name,
+            "email": user.email or email,
+            "phone": user.phone,
+            "avatar": user.avatar or avatar,
+            "role": "admin",  # VK пользователи - это бизнесмены
             "provider": "vk",
             "providerId": str(user_id),
-            "createdAt": client.created_at.isoformat() if client.created_at else "",
-            "updatedAt": client.updated_at.isoformat() if client.updated_at else ""
+            "createdAt": user.created_at.isoformat() if user.created_at else "",
+            "updatedAt": user.updated_at.isoformat() if user.updated_at else ""
         }
         
         print(f"Returning VK user data: {user_data}")

@@ -1052,48 +1052,15 @@ async def authenticate_vk(
                 detail="Ошибка декодирования VK токена"
             )
 
-        # Запрашиваем данные пользователя через VK API
-        import httpx
-        try:
-            async with httpx.AsyncClient() as client:
-                vk_api_url = "https://api.vk.com/method/users.get"
-                params = {
-                    "user_ids": user_id,
-                    "fields": "photo_200,contacts,personal,email",
-                    "access_token": access_token,
-                    "v": "5.131"
-                }
-                
-                response = await client.get(vk_api_url, params=params)
-                vk_response = response.json()
-                print(f"VK API response: {vk_response}")
-                
-                if "error" in vk_response:
-                    print(f"VK API error: {vk_response['error']}")
-                    # Используем базовые данные из токена
-                    first_name = f"VK User"
-                    last_name = str(user_id)
-                    avatar = None
-                    phone = None
-                    email = None
-                else:
-                    user_data = vk_response.get("response", [{}])[0]
-                    first_name = user_data.get("first_name", "")
-                    last_name = user_data.get("last_name", "")
-                    avatar = user_data.get("photo_200")
-                    phone = user_data.get("mobile_phone") or user_data.get("home_phone")
-                    # Пробуем получить email разными способами
-                    email = (user_data.get("email") or 
-                            user_data.get("contacts", {}).get("email") if isinstance(user_data.get("contacts"), dict) else None)
-                    
-        except Exception as api_error:
-            print(f"VK API request error: {api_error}")
-            # Используем базовые данные из токена
-            first_name = f"VK User"
-            last_name = str(user_id)
-            avatar = None
-            phone = None
-            email = None
+        # Поскольку VK ID SDK работает с фронтенда, а токен привязан к IP,
+        # мы не можем делать запросы к VK API с сервера.
+        # Используем только базовые данные из JWT токена
+        print(f"Using basic data from VK ID token for user_id: {user_id}")
+        first_name = f"VK User"
+        last_name = str(user_id)
+        avatar = None
+        phone = None
+        email = None
         
         if not user_id:
             raise HTTPException(
@@ -1176,7 +1143,17 @@ async def authenticate_vk(
         print(f"Returning VK user data: {user_data}")
         
         # 🛡️ УСТАНАВЛИВАЕМ HTTPONLY COOKIE с refresh token
-        response.set_cookie(
+        # Используем JSONResponse для правильной установки cookies
+        from fastapi.responses import JSONResponse
+        
+        response_data = {
+            "user": user_data,
+            "token": access_token,
+            "refreshToken": refresh_token
+        }
+        
+        json_response = JSONResponse(content=response_data)
+        json_response.set_cookie(
             key="refresh_token",
             value=refresh_token,
             max_age=30 * 24 * 60 * 60,  # 30 дней в секундах
@@ -1186,11 +1163,7 @@ async def authenticate_vk(
         )
         print(f"🔐 [vk-auth] Установлен HttpOnly cookie с refresh token")
         
-        return {
-            "user": user_data,
-            "token": access_token,
-            "refreshToken": refresh_token
-        }
+        return json_response
         
     except HTTPException:
         raise

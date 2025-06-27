@@ -936,7 +936,7 @@ const DesktopBookingForm: FC<DesktopBookingFormProps> = ({
                                     type="time"
                                     name="plannedTime"
                                     value={form.plannedTime}
-                                    min={availableAfter || '09:00'}
+                                                                            min={availableAfter || undefined}
                                     max={'23:00'}
                                     onChange={handleChange}
                                     style={{
@@ -1201,12 +1201,14 @@ const DesktopBookingForm: FC<DesktopBookingFormProps> = ({
                         {/* Расчет стоимости */}
                         <PricingDisplay
                             serviceType={form.serviceType}
-                            boardCount={form.boardCount}
-                            boardWithSeatCount={form.boardWithSeatCount}
-                            raftCount={form.raftCount}
+                            selectedItems={form.selectedItems || {}}
                             durationInHours={form.durationInHours}
                             isVIP={selectedClient?.isVIP}
                             showSettings={true}
+                            // Устаревшие поля для обратной совместимости
+                            boardCount={form.boardCount}
+                            boardWithSeatCount={form.boardWithSeatCount}
+                            raftCount={form.raftCount}
                         />
 
                         {/* Предупреждения */}

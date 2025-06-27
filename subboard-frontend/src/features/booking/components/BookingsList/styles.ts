@@ -24,9 +24,9 @@ const slideDown = keyframes`
 export const ModalOverlay = styled.div<{ $isClosing: boolean }>`
     position: fixed;
     inset: 0;
-    z-index: 50;
+    z-index: 9999;
     display: flex;
-    align-items: flex-end;
+    align-items: stretch;
     justify-content: center;
     background: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(4px);
@@ -40,7 +40,8 @@ export const ModalContainer = styled.div<{ $isClosing: boolean }>`
     padding: 24px;
     width: 100%;
     max-width: 600px;
-    max-height: 90vh;
+    max-height: 100vh;
+    min-height: 100vh;
     overflow-y: auto;
     animation: ${({ $isClosing }) => ($isClosing ? slideDown : slideUp)} 0.3s ease-in-out;
 `;

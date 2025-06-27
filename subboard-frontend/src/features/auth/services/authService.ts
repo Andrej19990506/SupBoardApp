@@ -385,7 +385,7 @@ class AuthService {
     console.log('📤 Отправляем запрос...');
     
     // Создаем новый экземпляр axios без базового Content-Type
-    const response = await api.post(`/v1/clients/${clientId}/avatar`, formData, {
+    const response = await api.post(`/v1/users/${clientId}/avatar`, formData, {
       headers: {
         'Content-Type': undefined, // Позволяем браузеру установить правильный заголовок с boundary
       },
@@ -398,7 +398,7 @@ class AuthService {
 
   async deleteAvatar(clientId: number): Promise<{ message: string; client: any }> {
     console.log('🗑️ deleteAvatar вызван с clientId:', clientId);
-    const response = await api.delete(`/v1/clients/${clientId}/avatar`);
+    const response = await api.delete(`/v1/users/${clientId}/avatar`);
     console.log('✅ Аватар удален, ответ:', response.data);
     return response.data;
   }

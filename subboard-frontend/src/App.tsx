@@ -5,6 +5,8 @@ import { Provider } from 'react-redux';
 import BookingCalendar from '@features/booking/components/BookingCalendar';
 import BookingForm from '@features/booking/components/BookingForm/BookingForm';
 import BookingsList from '@features/booking/components/BookingsList';
+import MobileInventoryModal from '@features/booking/components/InventoryModal/MobileInventoryModal';
+import DesktopInventoryModal from '@features/booking/components/InventoryModal/DesktopInventoryModal';
 import { useAppDispatch, useAppSelector } from '@features/booking/store/hooks';
 import {
     setSelectedDate,
@@ -20,7 +22,6 @@ import { ThemeProvider } from 'styled-components';
 import { theme } from '@shared/styles/theme';
 import { store } from '@features/booking/store';
 import Loader from '@shared/components/Layout/Loader';
-import InventoryModal from '@features/booking/components/InventoryModal/InventoryModal';
 import Notification from '@shared/components/Layout/Notification';
 import BookingStatusManager from '@features/booking/components/BookingsList/BookingStatusManager';
 import NotificationSound from '@features/booking/components/BookingsList/NotificationSound';
@@ -33,6 +34,7 @@ import { ProfileDropdownProvider } from '@features/auth/contexts/ProfileDropdown
 import ProfileDropdownGlobal from '@features/auth/components/ProfileDropdownGlobal';
 import pushNotificationService from '@features/booking/services/pushNotificationService';
 import { useSessionWatcher } from '@features/auth/hooks/useSessionWatcher';
+import { useDevice } from '@shared/hooks/useDevice';
 
 // Helper для извлечения даты из ISO строки
 const extractDateFromISO = (isoString?: string): string => {
@@ -50,6 +52,7 @@ const AppContent: FC = () => {
     console.log('[App] dispatch created:', { dispatch, hasDispatch: !!dispatch });
     const bookings = useAppSelector((state: RootState) => state.bookings.bookings);
     const selectedDate = useAppSelector((state: RootState) => state.bookings.selectedDate);
+    const { isMobile } = useDevice();
 
     // Автоматическое отслеживание валидности сессии
     useSessionWatcher();
@@ -71,11 +74,6 @@ const AppContent: FC = () => {
         const loadInitialData = async () => {
             try {
                 await Promise.all([
-                    // Больше не загружаем старые доски - используем новую систему инвентаря
-                    // dispatch(fetchBoards()).unwrap(),
-                    // Больше не загружаем старые seats и board_bookings - используем новую систему инвентаря
-                    // dispatch(fetchSeats()).unwrap(),
-                    // dispatch(fetchBoardBookings()).unwrap()
                     dispatch(fetchBookings()).unwrap()
                 ]);
                 
@@ -249,7 +247,6 @@ const AppContent: FC = () => {
                 onClose={() => setNotification(n => ({ ...n, isOpen: false }))}
             />
             <Loader isVisible={isLoading} />
-            <InventoryModal isOpen={inventoryOpen} onClose={() => setInventoryOpen(false)} />
             <BookingStatusManager 
                 bookings={allBookings} 
                 onStatusUpdate={handleStatusUpdate}
@@ -306,6 +303,21 @@ const AppContent: FC = () => {
                             onClose={handleCloseForm}
                             isClosing={isClosing}
                         />
+                    )}
+                    {inventoryOpen && (
+                        <>
+                            {isMobile ? (
+                                <MobileInventoryModal
+                                    isOpen={inventoryOpen}
+                                    onClose={() => setInventoryOpen(false)}
+                                />
+                            ) : (
+                                <DesktopInventoryModal
+                                    isOpen={inventoryOpen}
+                                    onClose={() => setInventoryOpen(false)}
+                                />
+                            )}
+                        </>
                     )}
                 </div>
             )}

@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
+import os
+import uuid
+from pathlib import Path
 from db.session import get_db_session
 from crud.user import user_crud
 from schemas.user import (
@@ -153,4 +156,134 @@ async def delete_current_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пользователь не найден"
+        )
+
+@router.post("/{user_id}/avatar")
+async def upload_user_avatar(
+    user_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Загрузить аватар для пользователя
+    """
+    # Пользователь может загружать аватар только для себя
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав"
+        )
+    
+    # Проверяем тип файла
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Файл должен быть изображением"
+        )
+    
+    # Проверяем размер файла (максимум 5MB)
+    if file.size and file.size > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Размер файла не должен превышать 5MB"
+        )
+    
+    try:
+        # Создаем директорию для аватаров если её нет
+        avatars_dir = Path("data/avatars")
+        avatars_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Генерируем уникальное имя файла
+        file_extension = file.filename.split('.')[-1] if file.filename and '.' in file.filename else 'jpg'
+        unique_filename = f"user_{user_id}_{uuid.uuid4().hex}.{file_extension}"
+        file_path = avatars_dir / unique_filename
+        
+        # Сохраняем файл
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        
+        # Обновляем путь к аватару в базе данных
+        avatar_url = f"/static/avatars/{unique_filename}"
+        user_update = UserUpdate(avatar=avatar_url)
+        updated_user = await user_crud.update_user(db, user_id, user_update)
+        
+        if not updated_user:
+            # Удаляем файл если не удалось обновить БД
+            if file_path.exists():
+                os.remove(file_path)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Ошибка при сохранении аватара"
+            )
+        
+        return {
+            "message": "Аватар успешно загружен",
+            "avatar_url": avatar_url,
+            "user": updated_user
+        }
+        
+    except Exception as e:
+        # Удаляем файл если произошла ошибка
+        if 'file_path' in locals() and file_path.exists():
+            os.remove(file_path)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при загрузке аватара: {str(e)}"
+        )
+
+@router.delete("/{user_id}/avatar")
+async def delete_user_avatar(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Удалить аватар пользователя
+    """
+    # Пользователь может удалять аватар только у себя
+    if current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав"
+        )
+    
+    try:
+        # Получаем текущего пользователя
+        user = await user_crud.get_user(db, user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Пользователь не найден"
+            )
+        
+        # Удаляем файл аватара если он есть
+        if user.avatar:
+            # Извлекаем имя файла из URL
+            if user.avatar.startswith('/static/avatars/'):
+                filename = user.avatar.replace('/static/avatars/', '')
+                file_path = Path("data/avatars") / filename
+                if file_path.exists():
+                    os.remove(file_path)
+        
+        # Обновляем запись в БД
+        user_update = UserUpdate(avatar=None)
+        updated_user = await user_crud.update_user(db, user_id, user_update)
+        
+        if not updated_user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Ошибка при удалении аватара"
+            )
+        
+        return {
+            "message": "Аватар успешно удален",
+            "user": updated_user
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при удалении аватара: {str(e)}"
         ) 

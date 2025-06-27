@@ -1,22 +1,17 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo} from 'react';
 import type { FC, MouseEvent } from 'react';
 import { format as formatDateFns, parseISO, addHours, formatDistanceStrict, isAfter, add, isBefore, isToday } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { AnimatePresence, useMotionValue } from 'framer-motion';
 import type { PanInfo } from 'framer-motion';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SearchIcon from '@mui/icons-material/Search';
-import SortIcon from '@mui/icons-material/Sort';
-import FilterListIcon from '@mui/icons-material/FilterList';
 import ShareIcon from '@mui/icons-material/Share';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import { useAppDispatch, useAppSelector } from '@features/booking/store/hooks';
 import { completeOrCancelBooking, updateBookingAsync, fetchBookings } from '@features/booking/store/slices/bookings-slice/bookingsThunk';
 import { fetchBoards } from '@features/booking/store/slices/board-slice/boardThunk';
-import { fetchBoardBookings } from '@features/booking/store/slices/board-bookings/boardBookingsThunks';
 import type { Booking, BookingStatus as BookingStatusEnum, ReminderSettings, ReminderHistory, ReminderTemplate } from '@/types/booking';
-import { PREPARATION_DURATION_HOURS, BookingStatus, ServiceType } from '@/types/booking';
+import { BookingStatus } from '@/types/booking';
 import {
     ModalOverlay,
     ModalContainer,
@@ -27,7 +22,6 @@ import {
     BookingCardContent,
     BookingTime,
     BookingInfo,
-    StatusBadge,
     ButtonGroup,
     PrimaryButton,
     SecondaryButton,
@@ -38,49 +32,21 @@ import {
     ConfirmText,
     ConfirmButtonWrapper,
     ConfirmButton,
-    EditButton
 } from './styles';
 import styled from 'styled-components';
 import CustomSelect from '@shared/components/CustomSelect/CustomSelect';
 import canoeIcon from '@/assets/canoe.png';
 import seatIcon from '@/assets/seat.png';
 import skiIcon from '@/assets/ski.png';
-import { getAvailableBoardsCount, getAvailableSeatsCount } from '@features/booking/utils/bookingUtils';
-import { TOTAL_BOARDS, TOTAL_SEATS } from '@features/booking/constants/bookingConstants';
+import { getAvailableBoardsCount} from '@features/booking/utils/bookingUtils';
 import InventorySelector from '@features/booking/components/BookingForm/InventorySelector';
-import { updateBooking } from '../../store/slices/bookings-slice/bookingsSlice';
 import QuickActions from './QuickActions';
 import DesktopBookingsList from './DesktopBookingsList';
 import ReminderSettingsComponent from './ReminderSettings';
 import ReminderStatusComponent from './ReminderStatus';
 import QuickStatusActions from './QuickStatusActions';
-import PushNotificationManager from './PushNotificationManager';
 import { useDevice } from '@shared/hooks/useDevice';
 
-const StatusActionButton = styled.button<{$variant?: 'positive' | 'neutral'}>`
-    background: none;
-    border: 1px solid ${({theme, $variant}) => $variant === 'positive' ? theme.colors.primary : '#86868B' };
-    color: ${({theme, $variant}) => $variant === 'positive' ? theme.colors.primary : '#86868B' };
-    padding: 4px 8px;
-    border-radius: 8px;
-    font-size: 0.75rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-top: 8px;
-    transition: all 0.2s ease;
-
-    &:hover {
-        border-color: #fff;
-        color: #fff;
-        background: rgba(255,255,255,0.1);
-    }
-
-    svg {
-        font-size: 1rem;
-    }
-`;
 
 const TimeInfo = styled.div`
   font-size: 0.8rem;
@@ -150,33 +116,6 @@ const FilterChip = styled.button<{ $active?: boolean }>`
     }
 `;
 
-const StatsBar = styled.div`
-    background: #2C2C2E;
-    border-radius: 12px;
-    padding: 12px 16px;
-    margin-bottom: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-`;
-
-const StatItem = styled.div`
-    text-align: center;
-    
-    .value {
-        font-size: 18px;
-        font-weight: 600;
-        color: #fff;
-        display: block;
-    }
-    
-    .label {
-        font-size: 11px;
-        color: #86868B;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-`;
 
 const ActionBar = styled.div`
     display: flex;
@@ -271,55 +210,7 @@ const statusOptions: { value: BookingStatusEnum; label: string; color: string }[
     { value: BookingStatus.RESCHEDULED, label: 'Перенесено', color: '#AF52DE' },
 ];
 
-interface InventoryEditContainerProps {
-    onSelect: (type: string) => void;
-    onClose: () => void;
-    available: {
-        board: number;
-        board_with_seat: number;
-        seat: number;
-        raft: number;
-    };
-}
 
-const InventoryEditContainer: React.FC<InventoryEditContainerProps & { counts: { board: number; boardWithSeat: number; raft: number } }> = ({ onSelect, onClose, available, counts }) => (
-    <div style={{
-        display: 'flex',
-        gap: 12,
-        background: '#23232a',
-        borderRadius: 10,
-        padding: '10px 16px',
-        marginTop: 8,
-        boxShadow: '0 2px 8px #0002',
-        alignItems: 'center',
-        zIndex: 10,
-        position: 'absolute',
-    }}>
-        <button onClick={() => onSelect('board')} style={{ background: 'none', border: 'none', cursor: 'pointer', position: 'relative' }} title="Добавить доску">
-            <img src={canoeIcon} alt="sup" style={{ width: 24, height: 24 }} />
-            <span style={{ position: 'absolute', top: -7, right: -7, fontSize: 11, color: '#007AFF', fontWeight: 600 }}>{available.board}/{TOTAL_BOARDS}</span>
-            <span style={{ position: 'absolute', bottom: -13, left: '50%', transform: 'translateX(-50%)', fontSize: 11, color: '#fff' }}>{counts.board || 0}</span>
-        </button>
-        <button onClick={() => onSelect('board_with_seat')} style={{ background: 'none', border: 'none', cursor: 'pointer', position: 'relative' }} title="Доска с креслом">
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
-                <img src={canoeIcon} alt="sup" style={{ width: 24, height: 24 }} />
-                <img src={seatIcon} alt="seat" style={{ width: 18, height: 18, marginLeft: -8 }} />
-            </span>
-            <span style={{ position: 'absolute', top: -7, right: -7, fontSize: 11, color: '#007AFF', fontWeight: 600 }}>{available.board_with_seat}/{TOTAL_BOARDS}</span>
-            <span style={{ position: 'absolute', bottom: -13, left: '50%', transform: 'translateX(-50%)', fontSize: 11, color: '#fff' }}>{counts.boardWithSeat || 0}</span>
-        </button>
-        <button onClick={() => onSelect('seat')} style={{ background: 'none', border: 'none', cursor: available.board === 0 ? 'not-allowed' : 'pointer', position: 'relative', opacity: available.board === 0 ? 0.4 : 1 }} title="Добавить кресло" disabled={available.board === 0}>
-            <img src={seatIcon} alt="seat" style={{ width: 22, height: 22 }} />
-            <span style={{ position: 'absolute', top: -7, right: -7, fontSize: 11, color: '#007AFF', fontWeight: 600 }}>{available.seat}/{TOTAL_SEATS}</span>
-        </button>
-        <button onClick={() => onSelect('raft')} style={{ background: 'none', border: 'none', cursor: 'pointer', position: 'relative' }} title="Добавить плот">
-            <img src={skiIcon} alt="raft" style={{ width: 28, height: 28 }} />
-            <span style={{ position: 'absolute', top: -7, right: -7, fontSize: 11, color: '#007AFF', fontWeight: 600 }}>{available.raft}/{Math.floor(TOTAL_BOARDS/2)}</span>
-            <span style={{ position: 'absolute', bottom: -13, left: '50%', transform: 'translateX(-50%)', fontSize: 11, color: '#fff' }}>{counts.raft || 0}</span>
-        </button>
-        <button onClick={onClose} style={{ marginLeft: 8, background: 'none', border: 'none', color: '#86868B', fontSize: 18, cursor: 'pointer' }}>×</button>
-    </div>
-);
 
 const BookingsList: FC<BookingsListProps> = ({
     date,
@@ -925,12 +816,6 @@ const BookingsList: FC<BookingsListProps> = ({
                     onClose={() => setShowReminderStatus(false)}
                 />
             )}
-            
-            {/* Push-уведомления */}
-            <PushNotificationManager 
-                bookings={bookings}
-                enabled={true}
-            />
         </ModalOverlay>
     );
 };
@@ -958,11 +843,7 @@ const BookingCard: FC<BookingCardProps> = ({
 }) => {
     const [isConfirming, setIsConfirming] = useState(false);
     const [editInventoryOpen, setEditInventoryOpen] = useState(false);
-    const [tempInventory, setTempInventory] = useState({
-        boardCount: booking.boardCount || 0,
-        boardWithSeatCount: booking.boardWithSeatCount || 0,
-        raftCount: booking.raftCount || 0,
-    });
+    const [tempSelectedItems, setTempSelectedItems] = useState<Record<number, number>>({});
     const x = useMotionValue(0);
     const dispatch = useAppDispatch();
     const now = useMemo(() => new Date(), []);
@@ -973,8 +854,6 @@ const BookingCard: FC<BookingCardProps> = ({
     const boards = useAppSelector(state => state.boards.boards);
     const totalBoards = boards.length;
     const availableBoards = getAvailableBoardsCount(plannedDate, duration, flatAllBookings, totalBoards, booking.id);
-    const availableSeats = getAvailableSeatsCount(plannedDate, duration, flatAllBookings, totalBoards, booking.id);
-    const availableRafts = Math.floor(availableBoards / 2);
     const boardCount = booking.boardCount || 0;
     const boardWithSeatCount = booking.boardWithSeatCount || 0;
     const raftCount = booking.raftCount || 0;
@@ -1007,9 +886,6 @@ const BookingCard: FC<BookingCardProps> = ({
         await dispatch(updateBookingAsync({
             id: typeof booking.id === 'string' ? parseInt(booking.id, 10) : booking.id,
             booking: {
-                boardCount: tempInventory.boardCount,
-                boardWithSeatCount: tempInventory.boardWithSeatCount,
-                raftCount: tempInventory.raftCount,
                 status: BookingStatus.IN_USE,
                 actualStartTime: new Date().toISOString(),
             }
@@ -1017,7 +893,6 @@ const BookingCard: FC<BookingCardProps> = ({
         // Redux уже обновил бронирования через updateBookingAsync.fulfilled
         // Обновляем только доски и связи
         await dispatch(fetchBoards());
-        // await dispatch(fetchBoardBookings());
         setStatusFilter(BookingStatus.IN_USE);
     };
 
@@ -1250,11 +1125,8 @@ const BookingCard: FC<BookingCardProps> = ({
                         {(booking.status === BookingStatus.BOOKED || booking.status === BookingStatus.IN_USE) && (
                             <button
                                 onClick={() => {
-                                    setTempInventory({
-                                        boardCount: boardCount,
-                                        boardWithSeatCount: boardWithSeatCount,
-                                        raftCount: raftCount,
-                                    });
+                                    // Инициализируем пустой объект - новый компонент сам загрузит актуальный инвентарь
+                                    setTempSelectedItems({});
                                     setEditInventoryOpen(true);
                                 }}
                                 style={{
@@ -1346,65 +1218,27 @@ const BookingCard: FC<BookingCardProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    padding: 0
                 }} onClick={() => setEditInventoryOpen(false)}>
                     <div style={{
-                        background: '#23232a',
-                        borderRadius: 16,
-                        padding: 32,
-                        minWidth: 320,
-                        boxShadow: '0 4px 32px #0008',
-                        position: 'relative',
+                        width: window.innerWidth <= 768 ? '100vw' : 'min(90vw, 500px)',
+                        height: window.innerWidth <= 768 ? '100vh' : 'min(90vh, 700px)',
+                        maxWidth: window.innerWidth <= 768 ? 'none' : '500px',
+                        maxHeight: window.innerWidth <= 768 ? 'none' : '700px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                        position: 'relative'
                     }} onClick={e => e.stopPropagation()}>
                         <InventorySelector
-                            counts={tempInventory}
-                            available={{
-                                board: availableBoards,
-                                board_with_seat: availableBoards,
-                                raft: availableRafts,
-                            }}
-                            onChange={setTempInventory}
-                            error={null}
-                            extraSeatButton={true}
+                            selectedItems={tempSelectedItems}
+                            onChange={setTempSelectedItems}
+                            plannedDate={booking.plannedStartTime ? booking.plannedStartTime.split('T')[0] : undefined}
+                            plannedTime={booking.plannedStartTime ? formatDateFns(parseISO(booking.plannedStartTime), 'HH:mm') : undefined}
+                            durationInHours={booking.durationInHours}
+                            bookingId={booking.id?.toString()}
+                            onClose={() => setEditInventoryOpen(false)}
                         />
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
-                            <button type="button" onClick={() => setEditInventoryOpen(false)} style={{
-                                background: 'none',
-                                border: 'none',
-                                color: '#86868B',
-                                fontSize: 16,
-                                cursor: 'pointer',
-                            }}>Отмена</button>
-                            <button type="button" onClick={() => {
-                                setEditInventoryOpen(false);
-                                if (
-                                    tempInventory.boardCount !== boardCount ||
-                                    tempInventory.boardWithSeatCount !== boardWithSeatCount ||
-                                    tempInventory.raftCount !== raftCount
-                                ) {
-                                    dispatch(updateBooking({
-                                        booking: {
-                                            id: booking.id,
-                                            boardCount: tempInventory.boardCount,
-                                            boardWithSeatCount: tempInventory.boardWithSeatCount,
-                                            raftCount: tempInventory.raftCount,
-                                        }
-                                    }));
-                                }
-                            }}
-                                disabled={tempInventory.boardCount + tempInventory.boardWithSeatCount + tempInventory.raftCount <= 0}
-                                style={{
-                                    background: '#007AFF',
-                                    color: '#fff',
-                                    border: 'none',
-                                    borderRadius: 10,
-                                    padding: '10px 28px',
-                                    fontSize: 16,
-                                    fontWeight: 600,
-                                    cursor: tempInventory.boardCount + tempInventory.boardWithSeatCount + tempInventory.raftCount <= 0 ? 'not-allowed' : 'pointer',
-                                    opacity: tempInventory.boardCount + tempInventory.boardWithSeatCount + tempInventory.raftCount <= 0 ? 0.5 : 1,
-                                }}
-                            >ОК</button>
-                        </div>
                     </div>
                 </div>
             )}

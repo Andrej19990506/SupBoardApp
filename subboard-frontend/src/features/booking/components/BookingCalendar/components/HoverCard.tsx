@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import type { DayStatistics } from '@features/booking/utils/calendarUtils';
-import { getUtilizationColor, getUtilizationText, calculateBookingRevenue } from '@features/booking/utils/calendarUtils';
+import { getUtilizationColor, getUtilizationText, calculateBookingRevenueLegacy as calculateBookingRevenue } from '@features/booking/utils/calendarUtils';
 import type { Booking } from '@/types/booking';
 import { ServiceType } from '@/types/booking';
 import { DEFAULT_PRICING } from '@features/booking/components/BookingForm/PricingDisplay';

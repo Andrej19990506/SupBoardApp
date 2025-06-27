@@ -6,7 +6,7 @@ import styled from 'styled-components';
 import DayCell from '@features/booking/components/BookingCalendar/DayCell';
 import type { Booking } from '@/types/booking';
 import { useAppSelector } from '@features/booking/store/hooks';
-import { calculateDayStatistics, calculateBookingRevenue } from '@features/booking/utils/calendarUtils';
+import { calculateDayStatistics, calculateBookingRevenueLegacy as calculateBookingRevenue } from '@features/booking/utils/calendarUtils';
 import { DEFAULT_PRICING } from '@features/booking/components/BookingForm/PricingDisplay';
 import type { PricingConfig } from '@features/booking/components/BookingForm/types';
 

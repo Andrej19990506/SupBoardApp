@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { FC } from 'react';
-import { formatISO, parseISO, format as formatDateFns, isValid as isValidDate, addHours } from 'date-fns';
+import { formatISO, parseISO, format as formatDateFns, isValid as isValidDate} from 'date-fns';
 import { ru } from 'date-fns/locale';
 import type { Booking, ServiceType as ServiceTypeEnum } from '@/types/booking';
 import { BookingStatus } from '@/types/booking';
 import { SERVICE_TYPES } from '@features/booking/constants/constants';
 import { useAppSelector, useAppDispatch } from '@features/booking/store/hooks';
-import { getAvailableBoardsCount, getAvailableBoardsForInterval, getAvailableSeatsCount, getDetailedAvailabilityInfo, generateInventoryWarningMessage } from '@features/booking/utils/bookingUtils';
+import { getAvailableBoardsForInterval, getDetailedAvailabilityInfo, generateInventoryWarningMessage } from '@features/booking/utils/bookingUtils';
 import type { RootState } from '@features/booking/store';
 import {
     Form,
@@ -34,9 +34,7 @@ import InventorySelector from '@features/booking/components/BookingForm/Inventor
 import { inventoryApi, type InventoryType } from '@/features/booking/services/inventoryApi';
 import Notification from '@shared/components/Layout/Notification';
 import { addBooking, fetchBookings, fetchFullyBookedDays } from '@features/booking/store/slices/bookings-slice/bookingsThunk';
-// import { fetchBoards } from '../../store/slices/board-slice/boardThunk'; // Больше не используется
 import { selectBoardBookings } from '@features/booking/store/slices/board-bookings/boardBookingsSelectors';
-import { fetchBoardBookings } from '@features/booking/store/slices/board-bookings/boardBookingsThunks';
 
 // Новые компоненты для улучшения UX сотрудников
 import ClientAutocomplete from './ClientAutocomplete';
@@ -91,7 +89,6 @@ const getInitialFormState = (initial: BookingFormProps['initial']) => {
         serviceType: initial?.serviceType ?? SERVICE_TYPES.RENT,
         // Новый формат инвентаря
         selectedItems: (initial as any)?.selectedItems || {} as Record<number, number>,
-        // Старые поля для совместимости (постепенно удаляем)
         boardCount: initial?.boardCount ?? 0,
         boardWithSeatCount: initial?.boardWithSeatCount ?? 0,
         raftCount: initial?.raftCount ?? 0,
@@ -493,10 +490,6 @@ const BookingForm: FC<BookingFormProps> = ({
             const resultAction = await dispatch(addBooking(bookingToSave) as any);
             if (addBooking.fulfilled.match(resultAction)) {
                 await dispatch(fetchBookings());
-                // await dispatch(fetchBoards()); // Больше не используется - используем новую систему инвентаря
-                // Больше не загружаем board_bookings - используем новую систему инвентаря
-                // await dispatch(fetchBoardBookings());
-                // Обновляем fullyBookedDays после успешного бронирования
                 const now = new Date();
                 const from = formatDateFns(now, 'yyyy-MM-dd');
                 const to = formatDateFns(new Date(now.getFullYear(), now.getMonth() + 3, 0), 'yyyy-MM-dd');
@@ -765,7 +758,7 @@ const BookingForm: FC<BookingFormProps> = ({
                                     type="time"
                                     name="plannedTime"
                                     value={form.plannedTime}
-                                    min={availableAfter || '09:00'}
+                                    min={availableAfter || undefined}
                                     max={'23:00'}
                                     onChange={handleChange}
                                 />
@@ -837,12 +830,13 @@ const BookingForm: FC<BookingFormProps> = ({
                                         {/* Отображение расчета стоимости */}
             <PricingDisplay
                 serviceType={form.serviceType}
-                boardCount={form.boardCount}
-                boardWithSeatCount={form.boardWithSeatCount}
-                raftCount={form.raftCount}
+                selectedItems={form.selectedItems || {}}
                 durationInHours={form.durationInHours}
                 isVIP={selectedClient?.isVIP}
                 showSettings={true}
+                boardCount={form.boardCount}
+                boardWithSeatCount={form.boardWithSeatCount}
+                raftCount={form.raftCount}
             />
 
                             <ButtonGroup>

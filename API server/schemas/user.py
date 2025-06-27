@@ -6,6 +6,7 @@ class UserBase(BaseModel):
     name: str
     phone: str
     email: Optional[EmailStr] = None
+    avatar: Optional[str] = None
     business_name: Optional[str] = None
     business_description: Optional[str] = None
     business_address: Optional[str] = None
@@ -31,6 +32,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
+    avatar: Optional[str] = None
     password: Optional[str] = None
     business_name: Optional[str] = None
     business_description: Optional[str] = None

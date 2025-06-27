@@ -1,9 +1,10 @@
 import { format, parseISO, isAfter, isBefore } from 'date-fns';
 import type { Booking } from '@/types/booking';
 import { ServiceType } from '@/types/booking';
-import { calculateFlexiblePricing } from '@features/booking/components/BookingForm/pricingUtils';
 import type { PricingConfig } from '@features/booking/components/BookingForm/types';
 import { getBookingInventoryUsage } from './bookingUtils';
+import { calculateFlexiblePricing } from '@features/booking/components/BookingForm/flexiblePricingUtils';
+import type { InventoryType } from '@/features/booking/services/inventoryApi';
 
 export interface DayStatistics {
     totalSlots: number;
@@ -26,12 +27,42 @@ export interface TimeSlotInfo {
 /**
  * Рассчитывает доход для конкретного бронирования с использованием правильных настроек цен
  */
-export function calculateBookingRevenue(booking: Booking, pricingConfig: PricingConfig): number {
+export function calculateBookingRevenue(
+    booking: Booking, 
+    pricingConfig: PricingConfig, 
+    inventoryTypes: InventoryType[] = []
+): number {
+    // Конвертируем старый формат инвентаря в новый
+    const selectedItems: Record<number, number> = {};
+    
+    // Если есть новый формат selectedItems, используем его
+    if ((booking as any).selectedItems) {
+        Object.assign(selectedItems, (booking as any).selectedItems);
+    } else {
+        // Иначе конвертируем из старого формата
+        // Нужно найти соответствующие типы инвентаря по именам
+        inventoryTypes.forEach(type => {
+            const typeName = type.name.toLowerCase();
+            if (typeName.includes('сап') || typeName.includes('sup')) {
+                if (booking.boardCount && booking.boardCount > 0) {
+                    selectedItems[type.id] = booking.boardCount;
+                }
+            } else if (typeName.includes('каяк') || typeName.includes('kayak')) {
+                if (booking.boardWithSeatCount && booking.boardWithSeatCount > 0) {
+                    selectedItems[type.id] = booking.boardWithSeatCount;
+                }
+            } else if (typeName.includes('плот') || typeName.includes('raft')) {
+                if (booking.raftCount && booking.raftCount > 0) {
+                    selectedItems[type.id] = booking.raftCount;
+                }
+            }
+        });
+    }
+    
     const costs = calculateFlexiblePricing(
         booking.serviceType,
-        booking.boardCount || 0,
-        booking.boardWithSeatCount || 0,
-        booking.raftCount || 0,
+        selectedItems,
+        inventoryTypes,
         booking.durationInHours || (booking.serviceType === 'аренда' ? 24 : 4),
         pricingConfig
     );
@@ -46,7 +77,8 @@ export function calculateDayStatistics(
     date: Date, 
     bookings: Booking[], 
     totalBoards: number,
-    pricingConfig?: PricingConfig
+    pricingConfig?: PricingConfig,
+    inventoryTypes: InventoryType[] = []
 ): DayStatistics {
     const dateStr = format(date, 'yyyy-MM-dd');
     
@@ -218,12 +250,12 @@ export function calculateDayStatistics(
 
     // Рассчитываем доход с правильными настройками цен
     let revenue = 0;
-    if (pricingConfig) {
+    if (pricingConfig && inventoryTypes.length > 0) {
         revenue = dayBookings.reduce((sum, booking) => {
-            return sum + calculateBookingRevenue(booking, pricingConfig);
+            return sum + calculateBookingRevenue(booking, pricingConfig, inventoryTypes);
         }, 0);
     } else {
-        // Fallback на старый метод, если нет настроек цен
+        // Fallback на старый метод, если нет настроек цен или типов инвентаря
         revenue = dayBookings.reduce((sum, booking) => {
             const basePrice = booking.serviceType === 'аренда' ? 1200 : 300;
             const inventory = (booking.boardCount || 0) + (booking.boardWithSeatCount || 0) + (booking.raftCount || 0) * 2;
@@ -302,4 +334,25 @@ export function getUtilizationText(percent: number): string {
     if (percent >= 40) return 'Средняя загрузка';
     if (percent >= 10) return 'Низкая загрузка';
     return 'Свободно';
+}
+
+// Wrapper функции для обратной совместимости (deprecated)
+
+/**
+ * @deprecated Используйте calculateBookingRevenue с inventoryTypes
+ */
+export function calculateBookingRevenueLegacy(booking: Booking, pricingConfig: PricingConfig): number {
+    return calculateBookingRevenue(booking, pricingConfig, []);
+}
+
+/**
+ * @deprecated Используйте calculateDayStatistics с inventoryTypes  
+ */
+export function calculateDayStatisticsLegacy(
+    date: Date, 
+    bookings: Booking[], 
+    totalBoards: number,
+    pricingConfig?: PricingConfig
+): DayStatistics {
+    return calculateDayStatistics(date, bookings, totalBoards, pricingConfig, []);
 } 

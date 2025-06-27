@@ -2,35 +2,44 @@ import React from 'react';
 import styled from 'styled-components';
 import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { DayStatistics, calculateBookingRevenue } from '../../../utils/calendarUtils';
+import { DayStatistics, calculateBookingRevenueLegacy as calculateBookingRevenue } from '../../../utils/calendarUtils';
 import { Booking } from '../../../../../types/booking';
 import { PricingConfig } from '../../BookingForm/types';
 import RecommendationsAnalysis from './RecommendationsAnalysis';
 
-// Константы
+// Константы - базовые настройки цен для обратной совместимости
 const DEFAULT_PRICING: PricingConfig = {
-    pricingMode: 'fixed' as const,
-    hourlyRates: {
-        boardHourPrice: 100,
-        boardWithSeatHourPrice: 150,
-        raftHourPrice: 200
-    },
-    fixedPrices: {
-        rent: {
-            board: { '24h': 2000, '48h': 3500, '72h': 5000, 'week': 10000 },
-            boardWithSeat: { '24h': 2500, '48h': 4000, '72h': 6000, 'week': 12000 },
-            raft: { '24h': 3000, '48h': 5000, '72h': 7000, 'week': 15000 }
+    pricingMode: 'hybrid' as const,
+    // Цены по типам инвентаря (будут загружены динамически)
+    inventoryPricing: {
+        // Базовые настройки для основных типов инвентаря
+        1: { // SUP доска
+            hourlyRate: 300,
+            fixedPrices: {
+                rent: { '24h': 2000, '48h': 3500, '72h': 5000, 'week': 12000 },
+                rafting: 1500,
+            },
+            deposit: 3000,
+            requireDeposit: true,
         },
-        rafting: {
-            board: 4000,
-            boardWithSeat: 5000,
-            raft: 6000
-        }
-    },
-    deposits: {
-        depositBoard: 1000,
-        depositRaft: 1500,
-        requireDeposit: true
+        2: { // Каяк
+            hourlyRate: 400,
+            fixedPrices: {
+                rent: { '24h': 2500, '48h': 4500, '72h': 6500, 'week': 15000 },
+                rafting: 1800,
+            },
+            deposit: 3000,
+            requireDeposit: true,
+        },
+        3: { // Плот
+            hourlyRate: 600,
+            fixedPrices: {
+                rent: { '24h': 4000, '48h': 7000, '72h': 10000, 'week': 24000 },
+                rafting: 2500,
+            },
+            deposit: 5000,
+            requireDeposit: true,
+        },
     },
     discounts: {
         enableDiscounts: true,

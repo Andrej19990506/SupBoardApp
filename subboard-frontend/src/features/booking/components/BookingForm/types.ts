@@ -98,49 +98,30 @@ export interface PricingConfig {
     // Режим ценообразования
     pricingMode: 'hourly' | 'fixed' | 'hybrid';
     
-    // Почасовые тарифы
-    hourlyRates: {
-        boardHourPrice: number;
-        boardWithSeatHourPrice: number;
-        raftHourPrice: number;
-    };
-    
-    // Фиксированные цены за услуги
-    fixedPrices: {
-        // Аренда (по длительности)
-        rent: {
-            board: {
-                '24h': number;    // сутки
-                '48h': number;    // 2 суток
-                '72h': number;    // 3 суток
-                'week': number;   // неделя
+    // Цены по типам инвентаря - гибкая система
+    inventoryPricing: {
+        [inventoryTypeId: number]: {
+            // Почасовая цена
+            hourlyRate: number;
+            
+            // Фиксированные цены для аренды
+            fixedPrices: {
+                rent: {
+                    '24h': number;    // сутки
+                    '48h': number;    // 2 суток
+                    '72h': number;    // 3 суток
+                    'week': number;   // неделя
+                };
+                // Фиксированная цена для сплава
+                rafting: number;
             };
-            boardWithSeat: {
-                '24h': number;
-                '48h': number;
-                '72h': number;
-                'week': number;
-            };
-            raft: {
-                '24h': number;
-                '48h': number;
-                '72h': number;
-                'week': number;
-            };
+            
+            // Залог за единицу
+            deposit: number;
+            
+            // Применяется ли залог
+            requireDeposit: boolean;
         };
-        // Сплав (фиксированная цена)
-        rafting: {
-            board: number;
-            boardWithSeat: number;
-            raft: number;
-        };
-    };
-    
-    // Залоги
-    deposits: {
-        depositBoard: number;
-        depositRaft: number;
-        requireDeposit: boolean;
     };
     
     // Скидки
@@ -156,15 +137,19 @@ export interface PricingConfig {
 
 export interface PricingDisplayProps {
     serviceType: ServiceType;
-    boardCount: number;
-    boardWithSeatCount: number;
-    raftCount: number;
+    // Новая система - выбранный инвентарь по типам
+    selectedItems: Record<number, number>; // inventoryTypeId -> quantity
     durationInHours: number;
     discount?: number;
     isVIP?: boolean;
     pricingConfig?: PricingConfig;
     onConfigChange?: (config: PricingConfig) => void;
     showSettings?: boolean;
+    
+    // Устаревшие поля для обратной совместимости (deprecated)
+    boardCount?: number;
+    boardWithSeatCount?: number;
+    raftCount?: number;
 }
 
 // Типы для быстрых действий сотрудников

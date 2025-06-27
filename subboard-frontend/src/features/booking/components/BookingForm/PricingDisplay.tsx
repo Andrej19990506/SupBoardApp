@@ -1,55 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { PricingDisplayProps, PricingConfig } from './types';
 import { SERVICE_TYPES } from '@features/booking/constants/constants';
-import { calculateFlexiblePricing, calculateDeposits, calculateDiscounts } from './pricingUtils';
+import { 
+    calculateFlexiblePricing, 
+    calculateFlexibleDeposits, 
+    calculateFlexibleDiscounts, 
+    createDefaultPricingForInventoryTypes 
+} from './flexiblePricingUtils';
+import type { InventoryType } from '@/features/booking/services/inventoryApi';
 
-// Дефолтные тарифы
+// Дефолтные тарифы для новой гибкой системы инвентаря
 export const DEFAULT_PRICING: PricingConfig = {
     pricingMode: 'hybrid',      // гибридный режим (почасовые + фиксированные)
     
-    // Почасовые тарифы
-    hourlyRates: {
-        boardHourPrice: 300,        // руб/час за доску
-        boardWithSeatHourPrice: 400, // руб/час за доску с креслом
-        raftHourPrice: 600,         // руб/час за плот
-    },
-    
-    // Фиксированные цены за услуги
-    fixedPrices: {
-        // Аренда (по длительности)
-        rent: {
-            board: {
-                '24h': 2000,    // сутки
-                '48h': 3500,    // 2 суток
-                '72h': 5000,    // 3 суток
-                'week': 12000,  // неделя
+    // Цены по типам инвентаря (будут загружены динамически)
+    inventoryPricing: {
+        // Базовые настройки для основных типов инвентаря
+        // ID 1: SUP доска (по умолчанию)
+        1: {
+            hourlyRate: 300,
+            fixedPrices: {
+                rent: {
+                    '24h': 2000,
+                    '48h': 3500,
+                    '72h': 5000,
+                    'week': 12000,
+                },
+                rafting: 1500,
             },
-            boardWithSeat: {
-                '24h': 2500,
-                '48h': 4500,
-                '72h': 6500,
-                'week': 15000,
-            },
-            raft: {
-                '24h': 4000,
-                '48h': 7000,
-                '72h': 10000,
-                'week': 24000,
-            },
+            deposit: 3000,
+            requireDeposit: true,
         },
-        // Сплав (фиксированная цена)
-        rafting: {
-            board: 1500,        // за сплав на доске
-            boardWithSeat: 1800, // за сплав на доске с креслом
-            raft: 2500,         // за сплав на плоту
+        // ID 2: Каяк (по умолчанию)
+        2: {
+            hourlyRate: 400,
+            fixedPrices: {
+                rent: {
+                    '24h': 2500,
+                    '48h': 4500,
+                    '72h': 6500,
+                    'week': 15000,
+                },
+                rafting: 1800,
+            },
+            deposit: 3000,
+            requireDeposit: true,
         },
-    },
-    
-    // Залоги
-    deposits: {
-        depositBoard: 3000,         // залог за доску
-        depositRaft: 5000,          // залог за плот
-        requireDeposit: true,       // требовать залог
+        // ID 3: Плот (по умолчанию)
+        3: {
+            hourlyRate: 600,
+            fixedPrices: {
+                rent: {
+                    '24h': 4000,
+                    '48h': 7000,
+                    '72h': 10000,
+                    'week': 24000,
+                },
+                rafting: 2500,
+            },
+            deposit: 5000,
+            requireDeposit: true,
+        },
     },
     
     // Скидки
@@ -57,7 +68,7 @@ export const DEFAULT_PRICING: PricingConfig = {
         enableDiscounts: true,      // включить скидки
         rates: {
             vip: 10,                // % скидка для VIP
-            group: 15,              // % скидка для групп (5+ досок)
+            group: 15,              // % скидка для групп (5+ единиц)
             repeat: 5,              // % скидка для постоянных клиентов
         }
     }
@@ -65,54 +76,79 @@ export const DEFAULT_PRICING: PricingConfig = {
 
 const PricingDisplay: React.FC<PricingDisplayProps> = ({
     serviceType,
-    boardCount,
-    boardWithSeatCount,
-    raftCount,
+    selectedItems,
     durationInHours,
     discount = 0,
     isVIP = false,
     pricingConfig = DEFAULT_PRICING,
     onConfigChange,
-    showSettings = false
+    showSettings = false,
+    // Устаревшие поля для обратной совместимости
+    boardCount = 0,
+    boardWithSeatCount = 0,
+    raftCount = 0
 }) => {
     const [showPricingSettings, setShowPricingSettings] = useState(false);
     const [localConfig, setLocalConfig] = useState<PricingConfig>(pricingConfig);
+    const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    // Используем новые утилиты для расчета
-    const costs = calculateFlexiblePricing(
-        serviceType,
-        boardCount,
-        boardWithSeatCount || 0,
-        raftCount || 0,
-        durationInHours,
-        localConfig
-    );
-    
-    const deposit = calculateDeposits(
-        boardCount,
-        boardWithSeatCount || 0,
-        raftCount || 0,
-        localConfig
-    );
-    
-    const discountInfo = calculateDiscounts(
-        costs.subtotal,
-        isVIP || false,
-        boardCount,
-        boardWithSeatCount || 0,
-        raftCount || 0,
-        discount || 0,
-        localConfig
-    );
+    // Загружаем типы инвентаря при монтировании и создаем динамическую конфигурацию
+    useEffect(() => {
+        const loadInventoryTypes = async () => {
+            try {
+                const { inventoryApi } = await import('@/features/booking/services/inventoryApi');
+                const response = await inventoryApi.getInventoryTypes();
+                const activeTypes = response.data.filter(type => type.is_active);
+                setInventoryTypes(activeTypes);
+                
+                // Создаем динамическую конфигурацию на основе загруженных типов
+                const dynamicConfig = createDefaultPricingForInventoryTypes(activeTypes);
+                setLocalConfig(dynamicConfig);
+            } catch (error) {
+                console.warn('Не удалось загрузить типы инвентаря:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadInventoryTypes();
+    }, []);
 
     const handleConfigChange = (newConfig: PricingConfig) => {
         setLocalConfig(newConfig);
         onConfigChange?.(newConfig);
     };
 
+    // Используем новые утилиты для расчета
+    const costs = calculateFlexiblePricing(
+        serviceType,
+        selectedItems,
+        inventoryTypes,
+        durationInHours,
+        localConfig
+    );
+    
+    const deposit = calculateFlexibleDeposits(
+        selectedItems,
+        inventoryTypes,
+        localConfig
+    );
+    
+    const discountInfo = calculateFlexibleDiscounts(
+        costs.subtotal,
+        selectedItems,
+        inventoryTypes,
+        isVIP || false,
+        discount || 0,
+        localConfig
+    );
+
     const finalCost = costs.subtotal - discountInfo.amount;
 
-    const hasItems = boardCount > 0 || (boardWithSeatCount || 0) > 0 || (raftCount || 0) > 0;
+    // Проверяем есть ли выбранные элементы (новая система или старая)
+    const hasSelectedItems = Object.values(selectedItems || {}).some(count => count > 0);
+    const hasLegacyItems = boardCount > 0 || (boardWithSeatCount || 0) > 0 || (raftCount || 0) > 0;
+    const hasItems = hasSelectedItems || hasLegacyItems;
 
     if (!hasItems) {
         return (
@@ -126,7 +162,11 @@ const PricingDisplay: React.FC<PricingDisplayProps> = ({
                 border: '1px solid rgba(255, 255, 255, 0.1)',
                 boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
                 position: 'relative',
-                overflow: 'hidden'
+                overflow: 'visible',
+                minHeight: 'auto',
+                width: '100%',
+                boxSizing: 'border-box',
+                zIndex: 1
             }}>
                 <div style={{
                     position: 'absolute',
@@ -150,10 +190,51 @@ const PricingDisplay: React.FC<PricingDisplayProps> = ({
                 <div style={{
                     fontSize: '14px',
                     color: '#A0A0A5',
-                    lineHeight: 1.4
+                    lineHeight: 1.4,
+                    marginBottom: showSettings ? '16px' : '0'
                 }}>
                     Выберите инвентарь для расчета стоимости
                 </div>
+                
+                {/* Кнопка настроек даже без выбранного инвентаря */}
+                {showSettings && (
+                    <div style={{ 
+                        marginTop: '16px',
+                        textAlign: 'center'
+                    }}>
+                        <button
+                            onClick={() => setShowPricingSettings(true)}
+                            style={{
+                                background: 'linear-gradient(135deg, #007AFF 0%, #0056CC 100%)',
+                                border: 'none',
+                                borderRadius: '12px',
+                                padding: '12px 20px',
+                                color: '#fff',
+                                fontSize: '14px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                boxShadow: '0 4px 15px rgba(0, 122, 255, 0.3)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                width: '100%'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 122, 255, 0.4)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'translateY(0)';
+                                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 122, 255, 0.3)';
+                            }}
+                        >
+                            <span style={{ fontSize: '16px' }}>⚙️</span>
+                            Настроить цены и залоги
+                        </button>
+                    </div>
+                )}
             </div>
         );
     }
@@ -164,7 +245,11 @@ const PricingDisplay: React.FC<PricingDisplayProps> = ({
             borderRadius: '12px',
             padding: '16px',
             marginTop: '16px',
-            color: '#fff'
+            color: '#fff',
+            overflow: 'visible',
+            minHeight: 'auto',
+            width: '100%',
+            boxSizing: 'border-box'
         }}>
             <div style={{ 
                 fontSize: '18px', 
@@ -186,19 +271,15 @@ const PricingDisplay: React.FC<PricingDisplayProps> = ({
 
             {/* Детализация по инвентарю */}
             <div style={{ marginBottom: '12px' }}>
-                {costs.calculationDetails.map((detail, index) => (
-                    <div key={index} style={{ 
+                {costs.itemCosts.map((item, index) => (
+                    <div key={item.inventoryTypeId} style={{ 
                         display: 'flex', 
                         justifyContent: 'space-between',
                         fontSize: '14px',
                         marginBottom: '4px'
                     }}>
-                        <span>{detail}</span>
-                        <span>
-                            {index === 0 && costs.boardCost > 0 && `${costs.boardCost.toLocaleString()}₽`}
-                            {index === 1 && costs.boardWithSeatCost > 0 && `${costs.boardWithSeatCost.toLocaleString()}₽`}
-                            {index === 2 && costs.raftCost > 0 && `${costs.raftCost.toLocaleString()}₽`}
-                        </span>
+                        <span>{item.icon} {item.quantity} {item.inventoryTypeName}</span>
+                        <span>{item.totalPrice.toLocaleString()}₽</span>
                     </div>
                 ))}
             </div>
@@ -266,7 +347,7 @@ const PricingDisplay: React.FC<PricingDisplayProps> = ({
             </div>
 
             {/* Залог */}
-            {deposit > 0 && (
+            {deposit.total > 0 && (
                 <div style={{ 
                     background: '#FFD60020',
                     borderRadius: '8px',
@@ -280,7 +361,7 @@ const PricingDisplay: React.FC<PricingDisplayProps> = ({
                         fontWeight: 600
                     }}>
                         <span>🛡️ Залог</span>
-                        <span>{deposit.toLocaleString()}₽</span>
+                        <span>{deposit.total.toLocaleString()}₽</span>
                     </div>
                     <div style={{ 
                         fontSize: '12px', 
@@ -308,53 +389,62 @@ const PricingDisplay: React.FC<PricingDisplayProps> = ({
                     color: '#007AFF'
                 }}>
                     <span>💳 Итого к получению</span>
-                    <span>{(finalCost + deposit).toLocaleString()}₽</span>
+                    <span>{(finalCost + deposit.total).toLocaleString()}₽</span>
                 </div>
                 <div style={{ 
                     fontSize: '12px', 
                     color: '#86868B',
                     marginTop: '4px'
                 }}>
-                    Услуга {finalCost.toLocaleString()}₽{deposit > 0 ? ` + залог ${deposit.toLocaleString()}₽` : ''}
+                    Услуга {finalCost.toLocaleString()}₽{deposit.total > 0 ? ` + залог ${deposit.total.toLocaleString()}₽` : ''}
                 </div>
             </div>
 
             {/* Кнопка настроек цен */}
             {showSettings && (
                 <div style={{ 
-                    marginTop: '12px',
+                    marginTop: '16px',
                     textAlign: 'center'
                 }}>
                     <button
                         onClick={() => setShowPricingSettings(true)}
                         style={{
-                            background: 'none',
-                            border: '1px solid #3C3C3E',
-                            borderRadius: '8px',
-                            padding: '8px 16px',
-                            color: '#86868B',
-                            fontSize: '12px',
+                            background: 'linear-gradient(135deg, #007AFF 0%, #0056CC 100%)',
+                            border: 'none',
+                            borderRadius: '12px',
+                            padding: '12px 20px',
+                            color: '#fff',
+                            fontSize: '14px',
+                            fontWeight: 600,
                             cursor: 'pointer',
-                            transition: 'all 0.2s ease'
+                            transition: 'all 0.2s ease',
+                            boxShadow: '0 4px 15px rgba(0, 122, 255, 0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            width: '100%'
                         }}
                         onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = '#007AFF';
-                            e.currentTarget.style.color = '#007AFF';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 122, 255, 0.4)';
                         }}
                         onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = '#3C3C3E';
-                            e.currentTarget.style.color = '#86868B';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 122, 255, 0.3)';
                         }}
                     >
-                        ⚙️ Настроить цены и залоги
+                        <span style={{ fontSize: '16px' }}>⚙️</span>
+                        Настроить цены и залоги
                     </button>
                 </div>
             )}
 
-            {/* Модальное окно настроек цен */}
+            {/* Модальное окно настроек цен под новую гибкую систему */}
             {showPricingSettings && (
-                <PricingSettingsModal
+                <FlexiblePricingSettingsModal
                     config={localConfig}
+                    inventoryTypes={inventoryTypes}
                     onChange={handleConfigChange}
                     onClose={() => setShowPricingSettings(false)}
                 />
@@ -363,14 +453,20 @@ const PricingDisplay: React.FC<PricingDisplayProps> = ({
     );
 };
 
-// Модальное окно настроек цен
-interface PricingSettingsModalProps {
+// Модальное окно настроек цен под гибкую систему инвентаря
+interface FlexiblePricingSettingsModalProps {
     config: PricingConfig;
+    inventoryTypes: InventoryType[];
     onChange: (config: PricingConfig) => void;
     onClose: () => void;
 }
 
-const PricingSettingsModal: React.FC<PricingSettingsModalProps> = ({ config, onChange, onClose }) => {
+const FlexiblePricingSettingsModal: React.FC<FlexiblePricingSettingsModalProps> = ({ 
+    config, 
+    inventoryTypes, 
+    onChange, 
+    onClose 
+}) => {
     const [localConfig, setLocalConfig] = useState<PricingConfig>(config);
 
     const handleSave = () => {
@@ -379,7 +475,35 @@ const PricingSettingsModal: React.FC<PricingSettingsModalProps> = ({ config, onC
     };
 
     const handleReset = () => {
-        setLocalConfig(DEFAULT_PRICING);
+        const resetConfig = createDefaultPricingForInventoryTypes(inventoryTypes);
+        setLocalConfig(resetConfig);
+    };
+
+    const updateInventoryPricing = (inventoryTypeId: number, path: string, value: number | boolean) => {
+        setLocalConfig(prev => {
+            const newConfig = { ...prev };
+            
+            // Убеждаемся что настройки для этого типа инвентаря существуют
+            if (!newConfig.inventoryPricing[inventoryTypeId]) {
+                newConfig.inventoryPricing[inventoryTypeId] = {
+                    hourlyRate: 300,
+                    fixedPrices: { rent: { '24h': 2000, '48h': 3500, '72h': 5000, 'week': 12000 }, rafting: 1500 },
+                    deposit: 3000,
+                    requireDeposit: true
+                };
+            }
+            
+            // Обновляем значение по пути
+            if (path === 'hourlyRate' || path === 'deposit' || path === 'requireDeposit') {
+                (newConfig.inventoryPricing[inventoryTypeId] as any)[path] = value;
+            } else if (path === 'fixedPrices.rafting') {
+                newConfig.inventoryPricing[inventoryTypeId].fixedPrices.rafting = value as number;
+            } else if (path === 'fixedPrices.rent.24h') {
+                newConfig.inventoryPricing[inventoryTypeId].fixedPrices.rent['24h'] = value as number;
+            }
+            
+            return newConfig;
+        });
     };
 
     const updateConfig = (path: string, value: number | boolean | string) => {
@@ -415,25 +539,43 @@ const PricingSettingsModal: React.FC<PricingSettingsModalProps> = ({ config, onC
         <div style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 10000,
-            background: 'rgba(0, 0, 0, 0.6)',
-            backdropFilter: 'blur(4px)',
+            zIndex: 20000,
+            background: 'rgba(0, 0, 0, 0.7)',
+            backdropFilter: 'blur(6px)',
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'flex-end',
             justifyContent: 'center',
-            padding: '20px'
+            padding: '0'
         }} onClick={onClose}>
             <div style={{
                 background: '#1C1C1E',
-                borderRadius: '16px',
-                padding: '24px',
-                width: '90vw',
-                maxWidth: '600px',
-                maxHeight: '80vh',
+                borderRadius: '20px 20px 0 0',
+                padding: '20px',
+                width: '100vw',
+                maxWidth: '100vw',
+                height: '100vh',
+                maxHeight: '100vh',
                 overflowY: 'auto',
-                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-                border: '1px solid #2C2C2E'
+                boxShadow: '0 -10px 40px rgba(0, 0, 0, 0.5)',
+                border: '1px solid #2C2C2E',
+                borderBottom: 'none',
+                display: 'flex',
+                flexDirection: 'column'
             }} onClick={(e) => e.stopPropagation()}>
+                {/* Индикатор свайпа для мобильной версии */}
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    marginBottom: '16px'
+                }}>
+                    <div style={{
+                        width: '40px',
+                        height: '4px',
+                        backgroundColor: '#3C3C3E',
+                        borderRadius: '2px'
+                    }}></div>
+                </div>
+
                 <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -445,27 +587,33 @@ const PricingSettingsModal: React.FC<PricingSettingsModalProps> = ({ config, onC
                     <h3 style={{ 
                         color: '#fff', 
                         margin: 0,
-                        fontSize: '20px',
+                        fontSize: '18px',
                         fontWeight: 600 
                     }}>
-                        ⚙️ Настройки цен и залогов
+                        ⚙️ Настройки цен
                     </h3>
                     <button
                         onClick={onClose}
                         style={{
-                            background: 'none',
+                            background: '#2C2C2E',
                             border: 'none',
+                            borderRadius: '50%',
+                            width: '32px',
+                            height: '32px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                             color: '#86868B',
-                            fontSize: '24px',
+                            fontSize: '16px',
                             cursor: 'pointer',
-                            padding: '4px',
-                            borderRadius: '4px',
-                            transition: 'color 0.2s ease'
+                            transition: 'all 0.2s ease'
                         }}
                         onMouseEnter={(e) => {
+                            (e.target as HTMLButtonElement).style.backgroundColor = '#3C3C3E';
                             (e.target as HTMLButtonElement).style.color = '#fff';
                         }}
                         onMouseLeave={(e) => {
+                            (e.target as HTMLButtonElement).style.backgroundColor = '#2C2C2E';
                             (e.target as HTMLButtonElement).style.color = '#86868B';
                         }}
                     >
@@ -473,499 +621,419 @@ const PricingSettingsModal: React.FC<PricingSettingsModalProps> = ({ config, onC
                     </button>
                 </div>
 
-            {/* Режим ценообразования */}
-            <div style={{ marginBottom: '16px' }}>
-                <div style={{ 
-                    color: '#86868B', 
-                    fontSize: '12px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    marginBottom: '8px'
-                }}>
-                    Режим ценообразования
-                </div>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                    {[
-                        { value: 'hourly', label: '⏰ Почасовой' },
-                        { value: 'fixed', label: '💰 Фиксированный' },
-                        { value: 'hybrid', label: '🔄 Гибридный' }
-                    ].map(mode => (
-                        <button
-                            key={mode.value}
-                            onClick={() => updateConfig('pricingMode', mode.value)}
-                            style={{
-                                flex: 1,
-                                padding: '8px 12px',
-                                background: localConfig.pricingMode === mode.value ? '#007AFF' : '#2C2C2E',
-                                border: 'none',
-                                borderRadius: '6px',
-                                color: localConfig.pricingMode === mode.value ? '#fff' : '#86868B',
-                                cursor: 'pointer',
-                                fontSize: '12px',
-                                fontWeight: 600
-                            }}
-                        >
-                            {mode.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* Почасовые тарифы */}
-            {(localConfig.pricingMode === 'hourly' || localConfig.pricingMode === 'hybrid') && (
-                <div style={{ marginBottom: '16px' }}>
-                    <div style={{ 
-                        color: '#86868B', 
-                        fontSize: '12px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                        marginBottom: '8px'
-                    }}>
-                        Цены за час (₽)
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                        <div>
-                            <label style={{ color: '#fff', fontSize: '12px', display: 'block', marginBottom: '4px' }}>
-                                🏄‍♂️ Доска
-                            </label>
-                            <input
-                                type="number"
-                                value={localConfig.hourlyRates.boardHourPrice}
-                                onChange={(e) => updateConfig('hourlyRates.boardHourPrice', Number(e.target.value))}
-                                style={{
-                                    width: '100%',
-                                    background: '#2C2C2E',
-                                    border: '1px solid #3C3C3E',
-                                    borderRadius: '4px',
-                                    padding: '6px',
-                                    color: '#fff',
-                                    fontSize: '12px'
-                                }}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ color: '#fff', fontSize: '12px', display: 'block', marginBottom: '4px' }}>
-                                🪑 С креслом
-                            </label>
-                            <input
-                                type="number"
-                                value={localConfig.hourlyRates.boardWithSeatHourPrice}
-                                onChange={(e) => updateConfig('hourlyRates.boardWithSeatHourPrice', Number(e.target.value))}
-                                style={{
-                                    width: '100%',
-                                    background: '#2C2C2E',
-                                    border: '1px solid #3C3C3E',
-                                    borderRadius: '4px',
-                                    padding: '6px',
-                                    color: '#fff',
-                                    fontSize: '12px'
-                                }}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ color: '#fff', fontSize: '12px', display: 'block', marginBottom: '4px' }}>
-                                🚣‍♂️ Плот
-                            </label>
-                            <input
-                                type="number"
-                                value={localConfig.hourlyRates.raftHourPrice}
-                                onChange={(e) => updateConfig('hourlyRates.raftHourPrice', Number(e.target.value))}
-                                style={{
-                                    width: '100%',
-                                    background: '#2C2C2E',
-                                    border: '1px solid #3C3C3E',
-                                    borderRadius: '4px',
-                                    padding: '6px',
-                                    color: '#fff',
-                                    fontSize: '12px'
-                                }}
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Фиксированные цены */}
-            {(localConfig.pricingMode === 'fixed' || localConfig.pricingMode === 'hybrid') && (
-                <div style={{ marginBottom: '16px' }}>
-                    <div style={{ 
-                        color: '#86868B', 
-                        fontSize: '12px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                        marginBottom: '8px'
-                    }}>
-                        Фиксированные цены (₽)
-                    </div>
-                    
-                    {/* Сплав */}
-                    <div style={{ marginBottom: '12px' }}>
-                        <h5 style={{ color: '#fff', fontSize: '14px', margin: '0 0 6px 0' }}>🌊 Сплав (за услугу)</h5>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                            <div>
-                                <label style={{ color: '#86868B', fontSize: '11px', display: 'block', marginBottom: '2px' }}>
-                                    🏄‍♂️ Доска за сплав
-                                </label>
-                                <input
-                                    type="number"
-                                    placeholder="1500"
-                                    value={localConfig.fixedPrices.rafting.board}
-                                    onChange={(e) => updateConfig('fixedPrices.rafting.board', Number(e.target.value))}
-                                    style={{
-                                        width: '100%',
-                                        background: '#2C2C2E',
-                                        border: '1px solid #3C3C3E',
-                                        borderRadius: '4px',
-                                        padding: '6px',
-                                        color: '#fff',
-                                        fontSize: '12px'
-                                    }}
-                                />
-                            </div>
-                            <div>
-                                <label style={{ color: '#86868B', fontSize: '11px', display: 'block', marginBottom: '2px' }}>
-                                    🪑 С креслом за сплав
-                                </label>
-                                <input
-                                    type="number"
-                                    placeholder="1800"
-                                    value={localConfig.fixedPrices.rafting.boardWithSeat}
-                                    onChange={(e) => updateConfig('fixedPrices.rafting.boardWithSeat', Number(e.target.value))}
-                                    style={{
-                                        width: '100%',
-                                        background: '#2C2C2E',
-                                        border: '1px solid #3C3C3E',
-                                        borderRadius: '4px',
-                                        padding: '6px',
-                                        color: '#fff',
-                                        fontSize: '12px'
-                                    }}
-                                />
-                            </div>
-                            <div>
-                                <label style={{ color: '#86868B', fontSize: '11px', display: 'block', marginBottom: '2px' }}>
-                                    🚣‍♂️ Плот за сплав
-                                </label>
-                                <input
-                                    type="number"
-                                    placeholder="2500"
-                                    value={localConfig.fixedPrices.rafting.raft}
-                                    onChange={(e) => updateConfig('fixedPrices.rafting.raft', Number(e.target.value))}
-                                    style={{
-                                        width: '100%',
-                                        background: '#2C2C2E',
-                                        border: '1px solid #3C3C3E',
-                                        borderRadius: '4px',
-                                        padding: '6px',
-                                        color: '#fff',
-                                        fontSize: '12px'
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Аренда */}
-                    <div>
-                        <h5 style={{ color: '#fff', fontSize: '14px', margin: '0 0 6px 0' }}>🏠 Аренда (сутки)</h5>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                            <div>
-                                <label style={{ color: '#86868B', fontSize: '11px', display: 'block', marginBottom: '2px' }}>
-                                    🏄‍♂️ Доска за 24ч
-                                </label>
-                                <input
-                                    type="number"
-                                    placeholder="2000"
-                                    value={localConfig.fixedPrices.rent.board['24h']}
-                                    onChange={(e) => updateConfig('fixedPrices.rent.board.24h', Number(e.target.value))}
-                                    style={{
-                                        width: '100%',
-                                        background: '#2C2C2E',
-                                        border: '1px solid #3C3C3E',
-                                        borderRadius: '4px',
-                                        padding: '6px',
-                                        color: '#fff',
-                                        fontSize: '12px'
-                                    }}
-                                />
-                            </div>
-                            <div>
-                                <label style={{ color: '#86868B', fontSize: '11px', display: 'block', marginBottom: '2px' }}>
-                                    🪑 С креслом за 24ч
-                                </label>
-                                <input
-                                    type="number"
-                                    placeholder="2500"
-                                    value={localConfig.fixedPrices.rent.boardWithSeat['24h']}
-                                    onChange={(e) => updateConfig('fixedPrices.rent.boardWithSeat.24h', Number(e.target.value))}
-                                    style={{
-                                        width: '100%',
-                                        background: '#2C2C2E',
-                                        border: '1px solid #3C3C3E',
-                                        borderRadius: '4px',
-                                        padding: '6px',
-                                        color: '#fff',
-                                        fontSize: '12px'
-                                    }}
-                                />
-                            </div>
-                            <div>
-                                <label style={{ color: '#86868B', fontSize: '11px', display: 'block', marginBottom: '2px' }}>
-                                    🚣‍♂️ Плот за 24ч
-                                </label>
-                                <input
-                                    type="number"
-                                    placeholder="4000"
-                                    value={localConfig.fixedPrices.rent.raft['24h']}
-                                    onChange={(e) => updateConfig('fixedPrices.rent.raft.24h', Number(e.target.value))}
-                                    style={{
-                                        width: '100%',
-                                        background: '#2C2C2E',
-                                        border: '1px solid #3C3C3E',
-                                        borderRadius: '4px',
-                                        padding: '6px',
-                                        color: '#fff',
-                                        fontSize: '12px'
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Залоги */}
-            <div style={{ marginBottom: '16px' }}>
+                {/* Прокручиваемый контент */}
                 <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    marginBottom: '8px'
+                    flex: 1,
+                    overflowY: 'auto',
+                    paddingRight: '4px',
+                    marginRight: '-4px'
                 }}>
-                    <input
-                        type="checkbox"
-                        id="requireDeposit"
-                        checked={localConfig.deposits.requireDeposit}
-                        onChange={(e) => updateConfig('deposits.requireDeposit', e.target.checked)}
-                        style={{ cursor: 'pointer' }}
-                    />
-                    <label 
-                        htmlFor="requireDeposit" 
-                        style={{ 
-                            color: '#fff', 
-                            fontSize: '14px',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        🛡️ Требовать залог
-                    </label>
-                </div>
-                
-                {localConfig.deposits.requireDeposit && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <div>
-                            <label style={{ color: '#fff', fontSize: '14px', display: 'block', marginBottom: '4px' }}>
-                                Залог за доску (₽)
-                            </label>
-                            <input
-                                type="number"
-                                value={localConfig.deposits.depositBoard}
-                                onChange={(e) => updateConfig('deposits.depositBoard', Number(e.target.value))}
-                                style={{
-                                    width: '100%',
-                                    background: '#2C2C2E',
-                                    border: '1px solid #3C3C3E',
-                                    borderRadius: '6px',
-                                    padding: '8px',
-                                    color: '#fff',
-                                    fontSize: '14px'
-                                }}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ color: '#fff', fontSize: '14px', display: 'block', marginBottom: '4px' }}>
-                                Залог за плот (₽)
-                            </label>
-                            <input
-                                type="number"
-                                value={localConfig.deposits.depositRaft}
-                                onChange={(e) => updateConfig('deposits.depositRaft', Number(e.target.value))}
-                                style={{
-                                    width: '100%',
-                                    background: '#2C2C2E',
-                                    border: '1px solid #3C3C3E',
-                                    borderRadius: '6px',
-                                    padding: '8px',
-                                    color: '#fff',
-                                    fontSize: '14px'
-                                }}
-                            />
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Скидки */}
-            <div style={{ marginBottom: '16px' }}>
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    marginBottom: '12px'
-                }}>
-                    <input
-                        type="checkbox"
-                        id="enableDiscounts"
-                        checked={localConfig.discounts.enableDiscounts}
-                        onChange={(e) => updateConfig('discounts.enableDiscounts', e.target.checked)}
-                        style={{ cursor: 'pointer' }}
-                    />
-                    <label 
-                        htmlFor="enableDiscounts" 
-                        style={{ 
-                            color: '#fff', 
-                            fontSize: '14px',
-                            cursor: 'pointer',
-                            fontWeight: 500
-                        }}
-                    >
-                        💰 Включить скидки
-                    </label>
-                </div>
-                
-                {localConfig.discounts.enableDiscounts && (
-                    <>
+                    {/* Режим ценообразования */}
+                    <div style={{ marginBottom: '24px' }}>
                         <div style={{ 
                             color: '#86868B', 
                             fontSize: '12px',
                             textTransform: 'uppercase',
                             letterSpacing: '0.5px',
-                            marginBottom: '8px'
+                            marginBottom: '12px'
                         }}>
-                            Размеры скидок (%)
+                            Режим ценообразования
                         </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                    <div>
-                        <label style={{ color: '#86868B', fontSize: '11px', display: 'block', marginBottom: '2px' }}>
-                            💎 VIP клиенты
-                        </label>
-                        <input
-                            type="number"
-                            min="0"
-                            max="30"
-                            placeholder="10"
-                            value={localConfig.discounts.rates.vip}
-                            onChange={(e) => updateConfig('discounts.rates.vip', Number(e.target.value))}
-                            style={{
-                                width: '100%',
-                                background: '#2C2C2E',
-                                border: '1px solid #3C3C3E',
-                                borderRadius: '4px',
-                                padding: '6px',
-                                color: '#fff',
-                                fontSize: '12px'
-                            }}
-                        />
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                            {[
+                                { value: 'hourly', label: '⏰ Почасовой' },
+                                { value: 'fixed', label: '💰 Фиксированный' },
+                                { value: 'hybrid', label: '🔄 Гибридный' }
+                            ].map(mode => (
+                                <button
+                                    key={mode.value}
+                                    onClick={() => updateConfig('pricingMode', mode.value)}
+                                    style={{
+                                        flex: 1,
+                                        padding: '12px 16px',
+                                        background: localConfig.pricingMode === mode.value ? '#007AFF' : '#2C2C2E',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        color: localConfig.pricingMode === mode.value ? '#fff' : '#86868B',
+                                        cursor: 'pointer',
+                                        fontSize: '13px',
+                                        fontWeight: 600,
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    {mode.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    <div>
-                        <label style={{ color: '#86868B', fontSize: '11px', display: 'block', marginBottom: '2px' }}>
-                            👥 Группы (5+ предметов)
-                        </label>
-                        <input
-                            type="number"
-                            min="0"
-                            max="30"
-                            placeholder="15"
-                            value={localConfig.discounts.rates.group}
-                            onChange={(e) => updateConfig('discounts.rates.group', Number(e.target.value))}
-                            style={{
-                                width: '100%',
-                                background: '#2C2C2E',
-                                border: '1px solid #3C3C3E',
-                                borderRadius: '4px',
-                                padding: '6px',
-                                color: '#fff',
-                                fontSize: '12px'
-                            }}
-                        />
+
+                    {/* Настройки по типам инвентаря */}
+                    <div style={{ marginBottom: '24px' }}>
+                        <div style={{ 
+                            color: '#86868B', 
+                            fontSize: '12px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                            marginBottom: '16px'
+                        }}>
+                            Настройки по типам инвентаря
+                        </div>
+
+                        {inventoryTypes.map(type => {
+                            const pricing = localConfig.inventoryPricing[type.id] || {
+                                hourlyRate: 300,
+                                fixedPrices: { rent: { '24h': 2000, '48h': 3500, '72h': 5000, 'week': 12000 }, rafting: 1500 },
+                                deposit: 3000,
+                                requireDeposit: true
+                            };
+
+                            return (
+                                <div key={type.id} style={{
+                                    background: '#2C2C2E',
+                                    borderRadius: '12px',
+                                    padding: '16px',
+                                    marginBottom: '16px'
+                                }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        marginBottom: '16px',
+                                        fontSize: '16px',
+                                        fontWeight: 600,
+                                        color: '#fff'
+                                    }}>
+                                        <span style={{ fontSize: '20px' }}>{type.icon_name || '📦'}</span>
+                                        {type.display_name}
+                                    </div>
+
+                                    {/* Почасовая цена */}
+                                    {(localConfig.pricingMode === 'hourly' || localConfig.pricingMode === 'hybrid') && (
+                                        <div style={{ marginBottom: '16px' }}>
+                                            <label style={{ 
+                                                color: '#86868B', 
+                                                fontSize: '12px', 
+                                                display: 'block', 
+                                                marginBottom: '8px',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.5px'
+                                            }}>
+                                                ⏰ Цена за час (₽)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={pricing.hourlyRate}
+                                                onChange={(e) => updateInventoryPricing(type.id, 'hourlyRate', Number(e.target.value))}
+                                                style={{
+                                                    width: '100%',
+                                                    background: '#1C1C1E',
+                                                    border: '1px solid #3C3C3E',
+                                                    borderRadius: '8px',
+                                                    padding: '14px',
+                                                    color: '#fff',
+                                                    fontSize: '16px',
+                                                    outline: 'none'
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Фиксированные цены */}
+                                    {(localConfig.pricingMode === 'fixed' || localConfig.pricingMode === 'hybrid') && (
+                                        <>
+                                            <div style={{ marginBottom: '16px' }}>
+                                                <label style={{ 
+                                                    color: '#86868B', 
+                                                    fontSize: '12px', 
+                                                    display: 'block', 
+                                                    marginBottom: '8px',
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.5px'
+                                                }}>
+                                                    🌊 Цена за сплав (₽)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={pricing.fixedPrices.rafting}
+                                                    onChange={(e) => updateInventoryPricing(type.id, 'fixedPrices.rafting', Number(e.target.value))}
+                                                    style={{
+                                                        width: '100%',
+                                                        background: '#1C1C1E',
+                                                        border: '1px solid #3C3C3E',
+                                                        borderRadius: '8px',
+                                                        padding: '14px',
+                                                        color: '#fff',
+                                                        fontSize: '16px',
+                                                        outline: 'none'
+                                                    }}
+                                                />
+                                            </div>
+
+                                            <div style={{ marginBottom: '16px' }}>
+                                                <label style={{ 
+                                                    color: '#86868B', 
+                                                    fontSize: '12px', 
+                                                    display: 'block', 
+                                                    marginBottom: '8px',
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.5px'
+                                                }}>
+                                                    🏠 Аренда за сутки (₽)
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={pricing.fixedPrices.rent['24h']}
+                                                    onChange={(e) => updateInventoryPricing(type.id, 'fixedPrices.rent.24h', Number(e.target.value))}
+                                                    style={{
+                                                        width: '100%',
+                                                        background: '#1C1C1E',
+                                                        border: '1px solid #3C3C3E',
+                                                        borderRadius: '8px',
+                                                        padding: '14px',
+                                                        color: '#fff',
+                                                        fontSize: '16px',
+                                                        outline: 'none'
+                                                    }}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* Залог */}
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            marginBottom: '8px'
+                                        }}>
+                                            <input
+                                                type="checkbox"
+                                                id={`requireDeposit-${type.id}`}
+                                                checked={pricing.requireDeposit}
+                                                onChange={(e) => updateInventoryPricing(type.id, 'requireDeposit', e.target.checked)}
+                                                style={{ cursor: 'pointer' }}
+                                            />
+                                            <label 
+                                                htmlFor={`requireDeposit-${type.id}`} 
+                                                style={{ 
+                                                    color: '#fff', 
+                                                    fontSize: '14px',
+                                                    cursor: 'pointer',
+                                                    fontWeight: 500
+                                                }}
+                                            >
+                                                🛡️ Требовать залог
+                                            </label>
+                                        </div>
+                                        
+                                        {pricing.requireDeposit && (
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={pricing.deposit}
+                                                onChange={(e) => updateInventoryPricing(type.id, 'deposit', Number(e.target.value))}
+                                                style={{
+                                                    width: '100%',
+                                                    background: '#1C1C1E',
+                                                    border: '1px solid #3C3C3E',
+                                                    borderRadius: '8px',
+                                                    padding: '14px',
+                                                    color: '#fff',
+                                                    fontSize: '16px',
+                                                    outline: 'none'
+                                                }}
+                                                placeholder="Сумма залога в рублях"
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
-                    <div>
-                        <label style={{ color: '#86868B', fontSize: '11px', display: 'block', marginBottom: '2px' }}>
-                            🔄 Постоянные клиенты
-                        </label>
-                        <input
-                            type="number"
-                            min="0"
-                            max="30"
-                            placeholder="5"
-                            value={localConfig.discounts.rates.repeat}
-                            onChange={(e) => updateConfig('discounts.rates.repeat', Number(e.target.value))}
-                            style={{
-                                width: '100%',
-                                background: '#2C2C2E',
-                                border: '1px solid #3C3C3E',
-                                borderRadius: '4px',
-                                padding: '6px',
-                                color: '#fff',
-                                fontSize: '12px'
-                            }}
-                        />
+
+                    {/* Скидки */}
+                    <div style={{ marginBottom: '24px' }}>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginBottom: '16px'
+                        }}>
+                            <input
+                                type="checkbox"
+                                id="enableDiscounts"
+                                checked={localConfig.discounts.enableDiscounts}
+                                onChange={(e) => updateConfig('discounts.enableDiscounts', e.target.checked)}
+                                style={{ cursor: 'pointer' }}
+                            />
+                            <label 
+                                htmlFor="enableDiscounts" 
+                                style={{ 
+                                    color: '#fff', 
+                                    fontSize: '16px',
+                                    cursor: 'pointer',
+                                    fontWeight: 600
+                                }}
+                            >
+                                💰 Включить скидки
+                            </label>
+                        </div>
+                        
+                        {localConfig.discounts.enableDiscounts && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                <div>
+                                    <label style={{ 
+                                        color: '#86868B', 
+                                        fontSize: '12px', 
+                                        display: 'block', 
+                                        marginBottom: '8px',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        💎 VIP клиенты (%)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="50"
+                                        value={localConfig.discounts.rates.vip}
+                                        onChange={(e) => updateConfig('discounts.rates.vip', Number(e.target.value))}
+                                        style={{
+                                            width: '100%',
+                                            background: '#2C2C2E',
+                                            border: '1px solid #3C3C3E',
+                                            borderRadius: '8px',
+                                            padding: '14px',
+                                            color: '#fff',
+                                            fontSize: '16px',
+                                            outline: 'none'
+                                        }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ 
+                                        color: '#86868B', 
+                                        fontSize: '12px', 
+                                        display: 'block', 
+                                        marginBottom: '8px',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>
+                                        👥 Групповая скидка (%)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="50"
+                                        value={localConfig.discounts.rates.group}
+                                        onChange={(e) => updateConfig('discounts.rates.group', Number(e.target.value))}
+                                        style={{
+                                            width: '100%',
+                                            background: '#2C2C2E',
+                                            border: '1px solid #3C3C3E',
+                                            borderRadius: '8px',
+                                            padding: '14px',
+                                            color: '#fff',
+                                            fontSize: '16px',
+                                            outline: 'none'
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
-                    </>
-                )}
-            </div>
 
-            {/* Кнопки */}
-            <div style={{
-                display: 'flex',
-                gap: '8px',
-                justifyContent: 'flex-end'
-            }}>
-                <button
-                    onClick={handleReset}
-                    style={{
-                        background: 'none',
-                        border: '1px solid #3C3C3E',
-                        borderRadius: '6px',
-                        padding: '8px 16px',
-                        color: '#86868B',
-                        fontSize: '12px',
-                        cursor: 'pointer'
-                    }}
-                >
-                    По умолчанию
-                </button>
-                <button
-                    onClick={onClose}
-                    style={{
-                        background: 'none',
-                        border: '1px solid #3C3C3E',
-                        borderRadius: '6px',
-                        padding: '8px 16px',
-                        color: '#86868B',
-                        fontSize: '12px',
-                        cursor: 'pointer'
-                    }}
-                >
-                    Отмена
-                </button>
-                <button
-                    onClick={handleSave}
-                    style={{
-                        background: '#007AFF',
-                        border: 'none',
-                        borderRadius: '6px',
-                        padding: '8px 16px',
-                        color: '#fff',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        fontWeight: 600
-                    }}
-                >
-                    Сохранить
-                </button>
-            </div>
+                {/* Кнопки */}
+                <div style={{
+                    display: 'flex',
+                    gap: '12px',
+                    justifyContent: 'stretch',
+                    marginTop: '24px',
+                    paddingTop: '20px',
+                    borderTop: '1px solid #2C2C2E'
+                }}>
+                    <button
+                        onClick={handleReset}
+                        style={{
+                            flex: 1,
+                            background: 'none',
+                            border: '1px solid #3C3C3E',
+                            borderRadius: '12px',
+                            padding: '14px 20px',
+                            color: '#86868B',
+                            fontSize: '16px',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                            (e.target as HTMLButtonElement).style.borderColor = '#FF9500';
+                            (e.target as HTMLButtonElement).style.color = '#FF9500';
+                        }}
+                        onMouseLeave={(e) => {
+                            (e.target as HTMLButtonElement).style.borderColor = '#3C3C3E';
+                            (e.target as HTMLButtonElement).style.color = '#86868B';
+                        }}
+                    >
+                        🔄 Сброс
+                    </button>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            flex: 1,
+                            background: 'none',
+                            border: '1px solid #3C3C3E',
+                            borderRadius: '12px',
+                            padding: '14px 20px',
+                            color: '#86868B',
+                            fontSize: '16px',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                            (e.target as HTMLButtonElement).style.borderColor = '#FF4D4F';
+                            (e.target as HTMLButtonElement).style.color = '#FF4D4F';
+                        }}
+                        onMouseLeave={(e) => {
+                            (e.target as HTMLButtonElement).style.borderColor = '#3C3C3E';
+                            (e.target as HTMLButtonElement).style.color = '#86868B';
+                        }}
+                    >
+                        ✕ Отмена
+                    </button>
+                    <button
+                        onClick={handleSave}
+                        style={{
+                            flex: 2,
+                            background: 'linear-gradient(135deg, #007AFF 0%, #0056CC 100%)',
+                            border: 'none',
+                            borderRadius: '12px',
+                            padding: '14px 20px',
+                            color: '#fff',
+                            fontSize: '16px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 15px rgba(0, 122, 255, 0.3)',
+                            transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                            (e.target as HTMLButtonElement).style.transform = 'translateY(-2px)';
+                            (e.target as HTMLButtonElement).style.boxShadow = '0 6px 20px rgba(0, 122, 255, 0.4)';
+                        }}
+                        onMouseLeave={(e) => {
+                            (e.target as HTMLButtonElement).style.transform = 'translateY(0)';
+                            (e.target as HTMLButtonElement).style.boxShadow = '0 4px 15px rgba(0, 122, 255, 0.3)';
+                        }}
+                    >
+                        💾 Сохранить
+                    </button>
+                </div>
             </div>
         </div>
     );

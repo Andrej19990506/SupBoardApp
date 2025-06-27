@@ -1,7 +1,6 @@
-import { parseISO, addHours, add, areIntervalsOverlapping, max, min } from 'date-fns';
+import { parseISO, addHours, areIntervalsOverlapping } from 'date-fns';
 import type { Booking } from '@/types/booking';
 import { BookingStatus, PREPARATION_DURATION_HOURS } from '@/types/booking';
-import { TOTAL_SEATS } from '@features/booking/constants/bookingConstants';
 
 /**
  * Определяет релевантный временной интервал для бронирования в зависимости от его статуса.

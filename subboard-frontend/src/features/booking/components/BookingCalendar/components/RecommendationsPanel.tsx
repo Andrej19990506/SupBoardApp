@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { DayStatistics, calculateBookingRevenue } from '../../../utils/calendarUtils';
+import { DayStatistics, calculateBookingRevenueLegacy as calculateBookingRevenue } from '../../../utils/calendarUtils';
 import { Booking } from '../../../../../types/booking';
 import { PricingConfig } from '../../BookingForm/types';
 

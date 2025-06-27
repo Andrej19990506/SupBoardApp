@@ -50,7 +50,8 @@ export const ModalContainer = styled.div<{ $isClosing: boolean }>`
     border-radius: 20px 20px 0 0;
     width: 100%;
     max-width: 600px;
-    max-height: 90vh; 
+    height: 100vh;
+    max-height: 100vh; 
     animation: ${({ $isClosing }) => ($isClosing ? slideDown : slideUp)} 0.3s ease-in-out;
     position: relative;
     transform-origin: bottom;
@@ -128,9 +129,11 @@ export const Form = styled.form`
     display: flex;
     flex-direction: column;
     gap: 16px;
-    flex-grow: 1;
+    flex: 1;
     overflow-y: auto;
     padding: 0 24px;
+    min-height: 0;
+    height: 100%;
 
     &::-webkit-scrollbar {
         width: 6px;

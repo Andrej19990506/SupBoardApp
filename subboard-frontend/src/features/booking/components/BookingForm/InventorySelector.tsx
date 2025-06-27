@@ -9,9 +9,12 @@ import { parseISO, isValid as isValidDate } from 'date-fns';
 import type { Booking } from '@/types/booking';
 import { useInventoryTotal } from './hooks/useInventoryTotal';
 import DesktopInventoryModal from '../InventoryModal/DesktopInventoryModal';
+import MobileInventoryModal from '../InventoryModal/MobileInventoryModal';
+import MobileInventorySelector from './MobileInventorySelector';
+import { useDevice } from '@/shared/hooks/useDevice';
 
-// Новый интерфейс для системы инвентаря
-interface NewInventorySelectorProps {
+// Интерфейс для новой системы инвентаря
+interface InventorySelectorProps {
     selectedItems: Record<number, number>; // typeId -> quantity
     onChange: (selectedItems: Record<number, number>) => void;
     error?: string | null;
@@ -22,70 +25,31 @@ interface NewInventorySelectorProps {
     onClose?: () => void; // для закрытия модального окна
 }
 
-// Legacy интерфейс для старых форм
-interface LegacyInventorySelectorProps {
-    counts: {
-        boardCount: number;
-        boardWithSeatCount: number;
-        raftCount: number;
-    };
-    available: {
-        board: number;
-        board_with_seat: number;
-        raft: number;
-    };
-    onChange: (counts: { boardCount: number; boardWithSeatCount: number; raftCount: number }) => void;
-    error?: string | null;
-    extraSeatButton?: boolean;
-}
 
-// Объединенный тип
-type InventorySelectorProps = NewInventorySelectorProps | LegacyInventorySelectorProps;
 
-// Функция для проверки типа пропсов
-const isLegacyProps = (props: InventorySelectorProps): props is LegacyInventorySelectorProps => {
-    return 'counts' in props && 'available' in props;
-};
-
-// Legacy компонент-адаптер для старых форм
-const LegacyInventorySelectorAdapter: React.FC<LegacyInventorySelectorProps> = ({ 
-    counts, 
-    available, 
+// Основной компонент InventorySelector
+const InventorySelector: React.FC<InventorySelectorProps> = ({ 
+    selectedItems, 
     onChange, 
-    error 
+    error,
+    plannedDate,
+    plannedTime,
+    durationInHours,
+    bookingId,
+    onClose
 }) => {
-    const [isMobile, setIsMobile] = useState(false);
-
-    useEffect(() => {
-        const checkIsMobile = () => {
-            setIsMobile(window.innerWidth <= 768);
-        };
-        checkIsMobile();
-        window.addEventListener('resize', checkIsMobile);
-        return () => window.removeEventListener('resize', checkIsMobile);
-    }, []);
-
-    const handleChange = (type: 'boardCount' | 'boardWithSeatCount' | 'raftCount', delta: number) => {
-        const newCounts = { ...counts };
-        const currentCount = newCounts[type] || 0;
-        const newCount = Math.max(0, currentCount + delta);
-        
-        // Проверка доступности
-        let maxAvailable = 0;
-        if (type === 'boardCount') {
-            maxAvailable = available.board;
-        } else if (type === 'boardWithSeatCount') {
-            maxAvailable = available.board_with_seat;
-        } else if (type === 'raftCount') {
-            maxAvailable = available.raft;
+    // Функция для определения контекста использования
+    const isInModal = onClose !== undefined; // Если есть onClose, значит мы в модальном окне
+    
+    // Если selectedItems не валидные, используем безопасную версию
+    const currentSelectedItems = React.useMemo(() => {
+        if (!selectedItems || typeof selectedItems !== 'object' || Array.isArray(selectedItems)) {
+            return {};
         }
-        
-        if (newCount <= maxAvailable) {
-            newCounts[type] = newCount;
-            onChange(newCounts);
-        }
-    };
+        return selectedItems;
+    }, [selectedItems]);
 
+    // Компонент счетчика с адаптивным дизайном
     const CounterComponent = ({ 
         count, 
         onDecrease, 
@@ -98,343 +62,150 @@ const LegacyInventorySelectorAdapter: React.FC<LegacyInventorySelectorProps> = (
         onIncrease: () => void;
         canDecrease: boolean;
         canIncrease: boolean;
-    }) => (
-        <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: isMobile ? 8 : 12,
-            backgroundColor: '#1C1C1E',
-            borderRadius: isMobile ? 6 : 8,
-            padding: isMobile ? '4px 6px' : '6px 8px'
-        }}>
-            <motion.button 
-                type="button" 
-                onClick={onDecrease}
-                disabled={!canDecrease}
-                whileHover={canDecrease ? { 
-                    scale: 1.1, 
-                    backgroundColor: '#0056CC',
-                    boxShadow: '0 0 15px rgba(0, 122, 255, 0.4)'
-                } : {}}
-                whileTap={canDecrease ? { 
-                    scale: 0.95,
-                    backgroundColor: '#004499'
-                } : {}}
-                style={{
-                    width: isMobile ? 32 : 28,
-                    height: isMobile ? 32 : 28,
-                    borderRadius: 6,
-                    border: 'none',
-                    backgroundColor: !canDecrease ? '#3C3C3E' : '#007AFF',
-                    color: '#fff',
-                    fontSize: isMobile ? 18 : 16,
-                    fontWeight: 600,
-                    cursor: !canDecrease ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                }}
-            >
-                −
-            </motion.button>
-            
-            <div style={{
-                minWidth: isMobile ? 16 : 20,
-                textAlign: 'center',
-                color: '#fff',
-                fontSize: isMobile ? 16 : 18,
-                fontWeight: 600,
-            }}>
-                {count}
-            </div>
-            
-            <motion.button 
-                type="button" 
-                onClick={onIncrease}
-                disabled={!canIncrease}
-                whileHover={canIncrease ? { 
-                    scale: 1.1, 
-                    backgroundColor: '#0056CC',
-                    boxShadow: '0 0 15px rgba(0, 122, 255, 0.4)'
-                } : {}}
-                whileTap={canIncrease ? { 
-                    scale: 0.95,
-                    backgroundColor: '#004499'
-                } : {}}
-                style={{
-                    width: isMobile ? 32 : 28,
-                    height: isMobile ? 32 : 28,
-                    borderRadius: 6,
-                    border: 'none',
-                    backgroundColor: !canIncrease ? '#3C3C3E' : '#007AFF',
-                    color: '#fff',
-                    fontSize: isMobile ? 18 : 16,
-                    fontWeight: 600,
-                    cursor: !canIncrease ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                }}
-            >
-                +
-            </motion.button>
-        </div>
-    );
-
-    return (
-        <div style={{ 
-            background: '#23232a', 
-            borderRadius: isMobile ? 12 : 16, 
-            padding: isMobile ? 16 : 20, 
-            margin: '8px 0' 
-        }}>
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: 16,
-                paddingBottom: 12,
-                borderBottom: '1px solid #3C3C3E'
-            }}>
-                <h3 style={{
-                    margin: 0,
-                    color: '#fff',
-                    fontSize: isMobile ? 14 : 16,
-                    fontWeight: 600
-                }}>
-                    🛻 Выберите инвентарь
-                </h3>
-            </div>
-
+    }) => {
+        // Адаптивные размеры
+        const buttonSize = isSmallMobile ? 38 : isMobile ? 44 : 36;
+        const fontSize = isSmallMobile ? 18 : isMobile ? 20 : 18;
+        const gap = isSmallMobile ? 12 : isMobile ? 16 : 12;
+        const padding = isSmallMobile ? '6px 10px' : isMobile ? '8px 12px' : '6px 8px';
+        
+        return (
             <div style={{ 
                 display: 'flex', 
-                gap: isMobile ? 12 : 16, 
-                alignItems: 'flex-start', 
-                justifyContent: isMobile ? 'stretch' : 'flex-start',
-                flexWrap: 'wrap',
-                flexDirection: isMobile ? 'column' : 'row'
+                alignItems: 'center', 
+                gap,
+                backgroundColor: '#1C1C1E',
+                borderRadius: 12,
+                padding
             }}>
-                {/* Сапборды */}
-                <div style={{
-                    display: 'flex',
-                    flexDirection: isMobile ? 'row' : 'column',
-                    alignItems: 'center',
-                    backgroundColor: '#2C2C2E',
-                    borderRadius: isMobile ? 8 : 12,
-                    padding: isMobile ? 16 : 16,
-                    minWidth: isMobile ? 'auto' : 120,
-                    flex: isMobile ? 'none' : '0 0 auto',
-                    width: isMobile ? '100%' : 'auto',
-                    position: 'relative',
-                    border: counts.boardCount > 0 ? '2px solid #007AFF' : '2px solid transparent',
-                    justifyContent: isMobile ? 'space-between' : 'center'
-                }}>
-                    <div style={{
-                        position: 'absolute',
-                        top: isMobile ? 6 : 8,
-                        right: isMobile ? 6 : 8,
-                        backgroundColor: available.board === 0 ? '#FF4D4F' : '#007AFF',
+                <motion.button 
+                    type="button" 
+                    onClick={onDecrease}
+                    disabled={!canDecrease}
+                    whileHover={canDecrease ? { 
+                        scale: 1.1, 
+                        backgroundColor: '#0056CC',
+                        boxShadow: '0 0 15px rgba(0, 122, 255, 0.4)'
+                    } : {}}
+                    whileTap={canDecrease ? { 
+                        scale: 0.95,
+                        backgroundColor: '#004499'
+                    } : {}}
+                    style={{
+                        width: buttonSize,
+                        height: buttonSize,
+                        borderRadius: 10,
+                        border: 'none',
+                        backgroundColor: !canDecrease ? '#3C3C3E' : '#007AFF',
                         color: '#fff',
-                        borderRadius: isMobile ? 6 : 8,
-                        padding: isMobile ? '1px 4px' : '2px 6px',
-                        fontSize: isMobile ? 10 : 11,
-                        fontWeight: 600
-                    }}>
-                        {available.board}
-                    </div>
-
-                    <div style={{
+                        fontSize,
+                        fontWeight: 600,
+                        cursor: !canDecrease ? 'not-allowed' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: isMobile ? 12 : 0,
-                        flexDirection: isMobile ? 'row' : 'column'
-                    }}>
-                        <div style={{
-                            fontSize: isMobile ? 32 : 40,
-                            marginBottom: isMobile ? 0 : 8,
-                        }}>
-                            🏄‍♂️
-                        </div>
-                        <div style={{
-                            color: '#fff',
-                            fontSize: isMobile ? 14 : 14,
-                            fontWeight: 500,
-                            marginBottom: isMobile ? 0 : 12,
-                            textAlign: isMobile ? 'left' : 'center'
-                        }}>
-                            Сапборды
-                        </div>
-                    </div>
-
-                    <CounterComponent
-                        count={counts.boardCount}
-                        onDecrease={() => handleChange('boardCount', -1)}
-                        onIncrease={() => handleChange('boardCount', 1)}
-                        canDecrease={counts.boardCount > 0}
-                        canIncrease={available.board > counts.boardCount}
-                    />
-                </div>
-
-                {/* Сапборды с креслом */}
+                        justifyContent: 'center',
+                        userSelect: 'none',
+                        WebkitUserSelect: 'none',
+                        MozUserSelect: 'none',
+                        msUserSelect: 'none',
+                        WebkitTouchCallout: 'none',
+                        WebkitTapHighlightColor: 'transparent',
+                        touchAction: 'manipulation'
+                    }}
+                >
+                    −
+                </motion.button>
+                
                 <div style={{
-                    display: 'flex',
-                    flexDirection: isMobile ? 'row' : 'column',
-                    alignItems: 'center',
-                    backgroundColor: '#2C2C2E',
-                    borderRadius: isMobile ? 8 : 12,
-                    padding: isMobile ? 16 : 16,
-                    minWidth: isMobile ? 'auto' : 120,
-                    flex: isMobile ? 'none' : '0 0 auto',
-                    width: isMobile ? '100%' : 'auto',
+                    minWidth: isSmallMobile ? 28 : isMobile ? 32 : 28,
+                    textAlign: 'center',
                     position: 'relative',
-                    border: counts.boardWithSeatCount > 0 ? '2px solid #007AFF' : '2px solid transparent',
-                    justifyContent: isMobile ? 'space-between' : 'center'
+                    overflow: 'hidden',
+                    height: buttonSize
                 }}>
-                    <div style={{
-                        position: 'absolute',
-                        top: isMobile ? 6 : 8,
-                        right: isMobile ? 6 : 8,
-                        backgroundColor: available.board_with_seat === 0 ? '#FF4D4F' : '#007AFF',
+                    <AnimatePresence mode="wait">
+                        <motion.span
+                            key={count}
+                            initial={{ y: -30, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            exit={{ y: 30, opacity: 0 }}
+                            transition={{ 
+                                type: "spring", 
+                                stiffness: 400, 
+                                damping: 25,
+                                duration: 0.3
+                            }}
+                            style={{
+                                color: '#fff',
+                                fontSize,
+                                fontWeight: 600,
+                                position: 'absolute',
+                                width: '100%',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center'
+                            }}
+                        >
+                            {count}
+                        </motion.span>
+                    </AnimatePresence>
+                </div>
+                
+                <motion.button 
+                    type="button" 
+                    onClick={onIncrease}
+                    disabled={!canIncrease}
+                    whileHover={canIncrease ? { 
+                        scale: 1.1, 
+                        backgroundColor: '#0056CC',
+                        boxShadow: '0 0 15px rgba(0, 122, 255, 0.4)'
+                    } : {}}
+                    whileTap={canIncrease ? { 
+                        scale: 0.95,
+                        backgroundColor: '#004499'
+                    } : {}}
+                    animate={!canIncrease ? { 
+                        opacity: 0.5,
+                        scale: 1
+                    } : { 
+                        opacity: 1,
+                        scale: 1
+                    }}
+                    transition={{ 
+                        type: "spring", 
+                        stiffness: 400, 
+                        damping: 25 
+                    }}
+                    style={{
+                        width: buttonSize,
+                        height: buttonSize,
+                        borderRadius: 10,
+                        border: 'none',
+                        backgroundColor: !canIncrease ? '#3C3C3E' : '#007AFF',
                         color: '#fff',
-                        borderRadius: isMobile ? 6 : 8,
-                        padding: isMobile ? '1px 4px' : '2px 6px',
-                        fontSize: isMobile ? 10 : 11,
-                        fontWeight: 600
-                    }}>
-                        {available.board_with_seat}
-                    </div>
-
-                    <div style={{
+                        fontSize,
+                        fontWeight: 600,
+                        cursor: !canIncrease ? 'not-allowed' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: isMobile ? 12 : 0,
-                        flexDirection: isMobile ? 'row' : 'column'
-                    }}>
-                        <div style={{
-                            fontSize: isMobile ? 32 : 40,
-                            marginBottom: isMobile ? 0 : 8,
-                        }}>
-                            🪑
-                        </div>
-                        <div style={{
-                            color: '#fff',
-                            fontSize: isMobile ? 14 : 14,
-                            fontWeight: 500,
-                            marginBottom: isMobile ? 0 : 12,
-                            textAlign: isMobile ? 'left' : 'center'
-                        }}>
-                            С креслом
-                        </div>
-                    </div>
-
-                    <CounterComponent
-                        count={counts.boardWithSeatCount}
-                        onDecrease={() => handleChange('boardWithSeatCount', -1)}
-                        onIncrease={() => handleChange('boardWithSeatCount', 1)}
-                        canDecrease={counts.boardWithSeatCount > 0}
-                        canIncrease={available.board_with_seat > counts.boardWithSeatCount}
-                    />
-                </div>
-
-                {/* Плоты */}
-                <div style={{
-                    display: 'flex',
-                    flexDirection: isMobile ? 'row' : 'column',
-                    alignItems: 'center',
-                    backgroundColor: '#2C2C2E',
-                    borderRadius: isMobile ? 8 : 12,
-                    padding: isMobile ? 16 : 16,
-                    minWidth: isMobile ? 'auto' : 120,
-                    flex: isMobile ? 'none' : '0 0 auto',
-                    width: isMobile ? '100%' : 'auto',
-                    position: 'relative',
-                    border: counts.raftCount > 0 ? '2px solid #007AFF' : '2px solid transparent',
-                    justifyContent: isMobile ? 'space-between' : 'center'
-                }}>
-                    <div style={{
-                        position: 'absolute',
-                        top: isMobile ? 6 : 8,
-                        right: isMobile ? 6 : 8,
-                        backgroundColor: available.raft === 0 ? '#FF4D4F' : '#007AFF',
-                        color: '#fff',
-                        borderRadius: isMobile ? 6 : 8,
-                        padding: isMobile ? '1px 4px' : '2px 6px',
-                        fontSize: isMobile ? 10 : 11,
-                        fontWeight: 600
-                    }}>
-                        {available.raft}
-                    </div>
-
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: isMobile ? 12 : 0,
-                        flexDirection: isMobile ? 'row' : 'column'
-                    }}>
-                        <div style={{
-                            fontSize: isMobile ? 32 : 40,
-                            marginBottom: isMobile ? 0 : 8,
-                        }}>
-                            🛶
-                        </div>
-                        <div style={{
-                            color: '#fff',
-                            fontSize: isMobile ? 14 : 14,
-                            fontWeight: 500,
-                            marginBottom: isMobile ? 0 : 12,
-                            textAlign: isMobile ? 'left' : 'center'
-                        }}>
-                            Плоты
-                        </div>
-                    </div>
-
-                    <CounterComponent
-                        count={counts.raftCount}
-                        onDecrease={() => handleChange('raftCount', -1)}
-                        onIncrease={() => handleChange('raftCount', 1)}
-                        canDecrease={counts.raftCount > 0}
-                        canIncrease={available.raft > counts.raftCount}
-                    />
-                </div>
+                        justifyContent: 'center',
+                        userSelect: 'none',
+                        WebkitUserSelect: 'none',
+                        MozUserSelect: 'none',
+                        msUserSelect: 'none',
+                        WebkitTouchCallout: 'none',
+                        WebkitTapHighlightColor: 'transparent',
+                        touchAction: 'manipulation'
+                    }}
+                >
+                    +
+                </motion.button>
             </div>
-
-            {error && (
-                <div style={{
-                    marginTop: 12,
-                    padding: 12,
-                    backgroundColor: '#FF4D4F20',
-                    border: '1px solid #FF4D4F',
-                    borderRadius: 8,
-                    color: '#FF4D4F',
-                    fontSize: 14
-                }}>
-                    {error}
-                </div>
-            )}
-        </div>
-    );
-};
-
-// Основной компонент InventorySelector
-const NewInventorySelector: React.FC<NewInventorySelectorProps> = ({ 
-    selectedItems, 
-    onChange, 
-    error,
-    plannedDate,
-    plannedTime,
-    durationInHours,
-    bookingId,
-    onClose
-}) => {
-    // Если selectedItems не валидные, используем безопасную версию
-    const currentSelectedItems = React.useMemo(() => {
-        if (!selectedItems || typeof selectedItems !== 'object' || Array.isArray(selectedItems)) {
-            return {};
-        }
-        return selectedItems;
-    }, [selectedItems]);
-    // Хук для отслеживания размера экрана
-    const [isMobile, setIsMobile] = useState(false);
+        );
+    };
+    // Хук для определения типа устройства
+    const { isMobile, deviceType } = useDevice();
+    const isSmallMobile = deviceType === 'mobile';
     const [shakeCard, setShakeCard] = useState<number | null>(null);
     
     // Состояния для загрузки инвентаря
@@ -444,6 +215,7 @@ const NewInventorySelector: React.FC<NewInventorySelectorProps> = ({
     
     // Состояние для управления модалом инвентаря
     const [isInventoryModalOpen, setIsInventoryModalOpen] = useState(false);
+    const [isMobileInventoryModalOpen, setIsMobileInventoryModalOpen] = useState(false);
     
     // Данные из Redux для расчета реальной доступности
     const bookingsMap = useAppSelector((state: RootState) => state.bookings.bookings);
@@ -473,15 +245,7 @@ const NewInventorySelector: React.FC<NewInventorySelectorProps> = ({
         return [];
     });
 
-    useEffect(() => {
-        const checkIsMobile = () => {
-            setIsMobile(window.innerWidth <= 768);
-        };
 
-        checkIsMobile();
-        window.addEventListener('resize', checkIsMobile);
-        return () => window.removeEventListener('resize', checkIsMobile);
-    }, []);
 
     // Загрузка типов инвентаря при монтировании
     useEffect(() => {
@@ -574,14 +338,14 @@ const NewInventorySelector: React.FC<NewInventorySelectorProps> = ({
                 // Рассчитываем доступность для каждого типа инвентаря
                 const calculatedAvailability: Record<number, number> = {};
                 
-                // Сначала считаем сколько уже выбрано "влияющих" типов (SUP досок)
-                const selectedAffectingTypes = Object.entries(currentSelectedItems)
-                    .filter(([typeIdStr]) => {
-                        const typeId = parseInt(typeIdStr);
-                        const type = inventoryTypes.find(t => t.id === typeId);
-                        return type?.affects_availability || false;
-                    })
-                    .reduce((sum, [, count]) => sum + (Number(count) || 0), 0);
+                        // Сначала считаем сколько уже выбрано "влияющих" типов (SUP досок)
+        const selectedAffectingTypes = Object.entries(currentSelectedItems)
+            .filter(([typeIdStr]) => {
+                const typeId = parseInt(typeIdStr);
+                const type = inventoryTypes.find(t => t.id === typeId);
+                return type?.affects_availability || false;
+            })
+            .reduce((sum, [, count]) => (sum as number) + (Number(count) || 0), 0);
                 
                 inventoryTypes.forEach(type => {
                     if (type.affects_availability) {
@@ -597,7 +361,7 @@ const NewInventorySelector: React.FC<NewInventorySelectorProps> = ({
                                 const otherType = inventoryTypes.find(t => t.id === otherTypeId);
                                 return otherType?.affects_availability || false;
                             })
-                            .reduce((sum, [, count]) => sum + (Number(count) || 0), 0);
+                            .reduce((sum, [, count]) => (sum as number) + (Number(count) || 0), 0);
                         
                         const availableByTimeSlot = Math.max(0, maxByTimeSlot - selectedOtherAffectingTypes);
                         
@@ -761,7 +525,7 @@ const NewInventorySelector: React.FC<NewInventorySelectorProps> = ({
                     .reduce((sum, [typeIdStr, count]) => {
                         const otherTypeId = parseInt(typeIdStr);
                         const countToUse = otherTypeId === typeId ? newCount : (Number(count) || 0);
-                        return sum + countToUse;
+                        return (sum as number) + countToUse;
                     }, 0);
                 
                 // Проверяем общий лимит временного слота для влияющих типов
@@ -822,17 +586,21 @@ const NewInventorySelector: React.FC<NewInventorySelectorProps> = ({
     };
 
     const getTotalSelected = () => {
-        return Object.values(currentSelectedItems).reduce((sum, count) => sum + count, 0);
+        return Object.values(currentSelectedItems).reduce((sum, count) => (sum as number) + (count as number), 0);
     };
 
     // Обработчик перехода к управлению инвентарем
     const handleManageInventory = () => {
-        // Открываем модал управления инвентарем
-        setIsInventoryModalOpen(true);
+        if (isMobile) {
+            setIsMobileInventoryModalOpen(true);
+        } else {
+            setIsInventoryModalOpen(true);
+        }
     };
 
     const handleInventoryModalClose = () => {
         setIsInventoryModalOpen(false);
+        setIsMobileInventoryModalOpen(false);
         // Перезагружаем типы инвентаря после закрытия модала
         // чтобы отобразить новые типы, если они были созданы
         const loadInventoryTypes = async () => {
@@ -847,190 +615,63 @@ const NewInventorySelector: React.FC<NewInventorySelectorProps> = ({
         loadInventoryTypes();
     };
 
-    // Компонент счетчика для переиспользования
-    const CounterComponent = ({ 
-        count, 
-        onDecrease, 
-        onIncrease, 
-        canDecrease, 
-        canIncrease 
-    }: {
-        count: number;
-        onDecrease: () => void;
-        onIncrease: () => void;
-        canDecrease: boolean;
-        canIncrease: boolean;
-    }) => (
-        <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: isMobile ? 8 : 12,
-            backgroundColor: '#1C1C1E',
-            borderRadius: isMobile ? 6 : 8,
-            padding: isMobile ? '4px 6px' : '6px 8px'
-        }}>
-            <motion.button 
-                type="button" 
-                onClick={onDecrease}
-                disabled={!canDecrease}
-                whileHover={canDecrease ? { 
-                    scale: 1.1, 
-                    backgroundColor: '#0056CC',
-                    boxShadow: '0 0 15px rgba(0, 122, 255, 0.4)'
-                } : {}}
-                whileTap={canDecrease ? { 
-                    scale: 0.95,
-                    backgroundColor: '#004499'
-                } : {}}
-                animate={!canDecrease ? { 
-                    opacity: 0.5,
-                    scale: 1
-                } : { 
-                    opacity: 1,
-                    scale: 1
-                }}
-                transition={{ 
-                    type: "spring", 
-                    stiffness: 400, 
-                    damping: 25 
-                }}
-                style={{
-                    width: isMobile ? 32 : 28,
-                    height: isMobile ? 32 : 28,
-                    borderRadius: 6,
-                    border: 'none',
-                    backgroundColor: !canDecrease ? '#3C3C3E' : '#007AFF',
-                    color: '#fff',
-                    fontSize: isMobile ? 18 : 16,
-                    fontWeight: 600,
-                    cursor: !canDecrease ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    userSelect: 'none',
-                    WebkitUserSelect: 'none',
-                    MozUserSelect: 'none',
-                    msUserSelect: 'none',
-                    WebkitTouchCallout: 'none',
-                    WebkitTapHighlightColor: 'transparent'
-                }}
-            >
-                −
-            </motion.button>
-            
-            <div style={{
-                minWidth: isMobile ? 16 : 20,
-                textAlign: 'center',
-                position: 'relative',
-                overflow: 'hidden',
-                height: isMobile ? 20 : 24
-            }}>
-                <AnimatePresence mode="wait">
-                    <motion.span
-                        key={count}
-                        initial={{ y: -30, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: 30, opacity: 0 }}
-                        transition={{ 
-                            type: "spring", 
-                            stiffness: 400, 
-                            damping: 25,
-                            duration: 0.3
-                        }}
-                        style={{
-                            color: '#fff',
-                            fontSize: isMobile ? 16 : 18,
-                            fontWeight: 600,
-                            position: 'absolute',
-                            width: '100%',
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center'
-                        }}
-                    >
-                        {count}
-                    </motion.span>
-                </AnimatePresence>
-            </div>
-            
-            <motion.button 
-                type="button" 
-                onClick={onIncrease}
-                disabled={!canIncrease}
-                whileHover={canIncrease ? { 
-                    scale: 1.1, 
-                    backgroundColor: '#0056CC',
-                    boxShadow: '0 0 15px rgba(0, 122, 255, 0.4)'
-                } : {}}
-                whileTap={canIncrease ? { 
-                    scale: 0.95,
-                    backgroundColor: '#004499'
-                } : {}}
-                animate={!canIncrease ? { 
-                    opacity: 0.5,
-                    scale: 1
-                } : { 
-                    opacity: 1,
-                    scale: 1
-                }}
-                transition={{ 
-                    type: "spring", 
-                    stiffness: 400, 
-                    damping: 25 
-                }}
-                style={{
-                    width: isMobile ? 32 : 28,
-                    height: isMobile ? 32 : 28,
-                    borderRadius: 6,
-                    border: 'none',
-                    backgroundColor: !canIncrease ? '#3C3C3E' : '#007AFF',
-                    color: '#fff',
-                    fontSize: isMobile ? 18 : 16,
-                    fontWeight: 600,
-                    cursor: !canIncrease ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    userSelect: 'none',
-                    WebkitUserSelect: 'none',
-                    MozUserSelect: 'none',
-                    msUserSelect: 'none',
-                    WebkitTouchCallout: 'none',
-                    WebkitTapHighlightColor: 'transparent'
-                }}
-            >
-                +
-            </motion.button>
-        </div>
-    );
+    // Если мобильное устройство и есть onClose (модальное окно), используем мобильную версию
+    if (isMobile && isInModal) {
+        return (
+            <AnimatePresence>
+                <MobileInventorySelector
+                    selectedItems={selectedItems}
+                    onChange={onChange}
+                    error={error}
+                    plannedDate={plannedDate}
+                    plannedTime={plannedTime}
+                    durationInHours={durationInHours}
+                    bookingId={bookingId}
+                    onClose={onClose}
+                />
+            </AnimatePresence>
+        );
+    }
 
     if (loading) {
         return (
             <div style={{ 
                 background: '#23232a', 
-                borderRadius: isMobile ? 12 : 16, 
-                padding: isMobile ? 16 : 20, 
-                margin: '8px 0',
+                borderRadius: isMobile ? 0 : 16, 
+                padding: 0,
+                margin: 0,
+                width: '100%',
+                height: isMobile ? '100vh' : 'auto',
+                maxHeight: isMobile ? '100vh' : 'none',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                minHeight: 120
+                flexDirection: 'column',
+                minHeight: isMobile ? '100vh' : 200,
+                boxSizing: 'border-box'
             }}>
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 12,
+                    flexDirection: 'column',
+                    gap: isSmallMobile ? 12 : 16,
                     color: '#86868B'
                 }}>
                     <div style={{
-                        width: 20,
-                        height: 20,
-                        border: '2px solid #3C3C3E',
-                        borderTop: '2px solid #007AFF',
+                        width: isSmallMobile ? 28 : isMobile ? 32 : 24,
+                        height: isSmallMobile ? 28 : isMobile ? 32 : 24,
+                        border: '3px solid #3C3C3E',
+                        borderTop: '3px solid #007AFF',
                         borderRadius: '50%',
                         animation: 'spin 1s linear infinite'
                     }} />
-                    Загрузка инвентаря...
+                    <div style={{
+                        fontSize: isSmallMobile ? 16 : isMobile ? 18 : 16,
+                        fontWeight: 500,
+                        textAlign: 'center'
+                    }}>
+                        Загрузка инвентаря...
+                    </div>
                 </div>
                 <style>{`
                     @keyframes spin {
@@ -1042,34 +683,53 @@ const NewInventorySelector: React.FC<NewInventorySelectorProps> = ({
         );
     }
 
+    // Адаптивные размеры и отступы
+    const containerPadding = isSmallMobile ? '16px 12px' : isMobile ? '20px 16px' : '20px';
+    const titleFontSize = isSmallMobile ? 16 : isMobile ? 18 : (inventoryTypes.length === 1 ? 18 : 16);
+    const clearButtonPadding = isSmallMobile ? '8px 12px' : isMobile ? '10px 16px' : '6px 12px';
+    const clearButtonFontSize = isSmallMobile ? 12 : isMobile ? 14 : 12;
+    const marginBottom = isSmallMobile ? 16 : isMobile ? 20 : 16;
+
     if (inventoryTypes.length === 0) {
         return (
             <div style={{ 
                 background: '#23232a', 
-                borderRadius: isMobile ? 12 : 16, 
-                padding: isMobile ? 20 : 24, 
-                margin: '8px 0',
-                textAlign: 'center'
+                borderRadius: isMobile ? 0 : 16, 
+                padding: isSmallMobile ? '16px 12px' : isMobile ? '20px 16px' : '24px',
+                margin: 0,
+                width: '100%',
+                height: isMobile ? '100vh' : 'auto',
+                maxHeight: isMobile ? '100vh' : 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                minHeight: isMobile ? '100vh' : 300,
+                boxSizing: 'border-box'
             }}>
                 <div style={{ 
-                    fontSize: isMobile ? 40 : 48,
-                    marginBottom: 16
+                    fontSize: isSmallMobile ? 48 : isMobile ? 64 : 48,
+                    marginBottom: isSmallMobile ? 16 : isMobile ? 24 : 16
                 }}>
                     📦
                 </div>
                 <div style={{ 
                     color: '#fff',
-                    fontSize: isMobile ? 16 : 18,
+                    fontSize: isSmallMobile ? 18 : isMobile ? 20 : 18,
                     fontWeight: 600,
-                    marginBottom: 8
+                    marginBottom: isSmallMobile ? 8 : isMobile ? 12 : 8,
+                    lineHeight: 1.2
                 }}>
                     Инвентарь не настроен
                 </div>
                 <div style={{ 
                     color: '#86868B',
-                    fontSize: isMobile ? 14 : 15,
-                    marginBottom: 20,
-                    lineHeight: 1.4
+                    fontSize: isSmallMobile ? 14 : isMobile ? 16 : 15,
+                    marginBottom: isSmallMobile ? 24 : isMobile ? 32 : 20,
+                    lineHeight: 1.4,
+                    maxWidth: isSmallMobile ? '90%' : isMobile ? '80%' : 'none',
+                    textAlign: 'center'
                 }}>
                     Для создания бронирований необходимо<br />
                     сначала добавить типы инвентаря в систему
@@ -1087,16 +747,16 @@ const NewInventorySelector: React.FC<NewInventorySelectorProps> = ({
                     style={{
                         background: 'linear-gradient(135deg, #007AFF 0%, #0056CC 100%)',
                         border: 'none',
-                        borderRadius: isMobile ? 8 : 10,
-                        padding: isMobile ? '12px 20px' : '14px 24px',
+                        borderRadius: 12,
+                        padding: isSmallMobile ? '14px 20px' : isMobile ? '16px 24px' : '14px 24px',
                         color: '#fff',
-                        fontSize: isMobile ? 14 : 15,
+                        fontSize: isSmallMobile ? 15 : isMobile ? 16 : 15,
                         fontWeight: 600,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: 8,
+                        gap: isSmallMobile ? 8 : isMobile ? 12 : 8,
                         margin: '0 auto',
                         boxShadow: '0 4px 15px rgba(0, 122, 255, 0.2)',
                         userSelect: 'none',
@@ -1104,17 +764,20 @@ const NewInventorySelector: React.FC<NewInventorySelectorProps> = ({
                         MozUserSelect: 'none',
                         msUserSelect: 'none',
                         WebkitTouchCallout: 'none',
-                        WebkitTapHighlightColor: 'transparent'
+                        WebkitTapHighlightColor: 'transparent',
+                        minHeight: isSmallMobile ? 48 : isMobile ? 52 : 'auto',
+                        touchAction: 'manipulation',
+                        alignSelf: 'stretch'
                     }}
                 >
-                    <span style={{ fontSize: 16 }}>⚙️</span>
+                    <span style={{ fontSize: isSmallMobile ? 16 : isMobile ? 20 : 16 }}>⚙️</span>
                     Управление инвентарем
                 </motion.button>
                 
                 <div style={{ 
                     color: '#5A5A5E',
-                    fontSize: isMobile ? 12 : 13,
-                    marginTop: 12,
+                    fontSize: isSmallMobile ? 12 : isMobile ? 14 : 13,
+                    marginTop: isSmallMobile ? 16 : isMobile ? 20 : 12,
                     fontStyle: 'italic'
                 }}>
                     Или обратитесь к администратору
@@ -1126,396 +789,458 @@ const NewInventorySelector: React.FC<NewInventorySelectorProps> = ({
     return (
         <div style={{ 
             background: '#23232a', 
-            borderRadius: isMobile ? 12 : 16, 
-            padding: isMobile ? 16 : 20, 
-            margin: '8px 0',
+            borderRadius: isMobile ? 0 : 16, 
+            padding: containerPadding,
+            margin: 0,
+            height: isMobile ? '100vh' : 'auto',
+            maxHeight: isMobile ? '100vh' : 'none',
+            width: '100%',
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
             userSelect: 'none',
             WebkitUserSelect: 'none',
             MozUserSelect: 'none',
             msUserSelect: 'none',
             WebkitTouchCallout: 'none',
-            WebkitTapHighlightColor: 'transparent'
+            WebkitTapHighlightColor: 'transparent',
+            overflow: 'hidden',
+            position: 'relative'
         }}>
-            {/* Заголовок с кнопкой очистки */}
+            {/* Заголовок с кнопками */}
             <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: isMobile ? 12 : 16
+                marginBottom,
+                flexShrink: 0,
+                gap: 12
             }}>
                 <h3 style={{
                     margin: 0,
                     color: '#fff',
-                    fontSize: isMobile ? 14 : (inventoryTypes.length === 1 ? 18 : 16),
-                    fontWeight: inventoryTypes.length === 1 ? 700 : 600,
-                    textShadow: inventoryTypes.length === 1 ? '0 1px 2px rgba(0, 0, 0, 0.3)' : 'none'
+                    fontSize: titleFontSize,
+                    fontWeight: 600,
+                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
+                    flex: 1,
+                    minWidth: 0,
+                    lineHeight: 1.2
                 }}>
                     {inventoryTypes.length === 1 ? 
                         `🎯 ${inventoryTypes[0].display_name}` : 
                         '🛻 Выберите инвентарь'
                     }
                 </h3>
-                <AnimatePresence>
-                    {getTotalSelected() > 0 && (
+                
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    flexShrink: 0
+                }}>
+                    <AnimatePresence>
+                        {getTotalSelected() > 0 && (
+                            <motion.button
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.8 }}
+                                whileHover={{ 
+                                    scale: 1.05,
+                                    backgroundColor: '#FF4D4F20'
+                                }}
+                                whileTap={{ scale: 0.95 }}
+                                transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                                type="button"
+                                onClick={handleClearAll}
+                                style={{
+                                    background: 'none',
+                                    border: '1px solid #FF4D4F',
+                                    borderRadius: 8,
+                                    padding: clearButtonPadding,
+                                    color: '#FF4D4F',
+                                    fontSize: clearButtonFontSize,
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                    userSelect: 'none',
+                                    WebkitUserSelect: 'none',
+                                    MozUserSelect: 'none',
+                                    msUserSelect: 'none',
+                                    WebkitTouchCallout: 'none',
+                                    WebkitTapHighlightColor: 'transparent',
+                                    touchAction: 'manipulation',
+                                    minHeight: isSmallMobile ? 36 : isMobile ? 40 : 'auto',
+                                    flexShrink: 0,
+                                    whiteSpace: 'nowrap'
+                                }}
+                                title="Очистить весь выбор"
+                            >
+                                Очистить
+                            </motion.button>
+                        )}
+                    </AnimatePresence>
+                    
+                    {/* Кнопка закрытия только для десктопного модального окна */}
+                    {isInModal && !isMobile && (
                         <motion.button
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.8 }}
                             whileHover={{ 
-                                scale: 1.05,
-                                backgroundColor: '#FF4D4F20'
+                                scale: 1.1,
+                                backgroundColor: '#3C3C3E'
                             }}
-                            whileTap={{ scale: 0.95 }}
+                            whileTap={{ scale: 0.9 }}
                             transition={{ type: "spring", stiffness: 400, damping: 25 }}
                             type="button"
-                            onClick={handleClearAll}
+                            onClick={onClose}
                             style={{
                                 background: 'none',
-                                border: '1px solid #FF4D4F',
-                                borderRadius: 6,
-                                padding: '4px 8px',
-                                color: '#FF4D4F',
-                                fontSize: 12,
+                                border: 'none',
+                                borderRadius: '50%',
+                                width: 36,
+                                height: 36,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
                                 cursor: 'pointer',
+                                color: '#86868B',
+                                fontSize: 20,
                                 userSelect: 'none',
                                 WebkitUserSelect: 'none',
                                 MozUserSelect: 'none',
                                 msUserSelect: 'none',
                                 WebkitTouchCallout: 'none',
-                                WebkitTapHighlightColor: 'transparent'
+                                WebkitTapHighlightColor: 'transparent',
+                                touchAction: 'manipulation',
+                                flexShrink: 0
                             }}
-                            title="Очистить весь выбор"
+                            title="Закрыть"
                         >
-                            Очистить
+                            ✕
                         </motion.button>
                     )}
-                </AnimatePresence>
+                </div>
             </div>
 
-            {/* TODO: Временно отключено до обновления PresetManager */}
-            {/* {presets.length > 0 && (
-                <PresetManager
-                    presets={presets}
-                    onPresetsChange={handlePresetsChange}
-                    onPresetSelect={handlePresetSelect}
-                    currentSelection={currentSelectedItems}
-                />
-            )} */}
-
-            {/* Контейнер с инвентарем */}
-            <div style={{ 
-                display: 'flex', 
-                gap: isMobile ? 12 : 16, 
-                alignItems: inventoryTypes.length === 1 ? 'center' : 'flex-start', 
-                justifyContent: inventoryTypes.length === 1 ? 'center' : (isMobile ? 'stretch' : 'flex-start'),
-                flexWrap: 'wrap',
-                flexDirection: isMobile ? 'column' : 'row',
-                // Для одного элемента добавляем дополнительные отступы
-                padding: inventoryTypes.length === 1 ? (isMobile ? '20px 0' : '30px 0') : '0'
+            {/* Прокручиваемый контейнер с контентом */}
+            <div style={{
+                flex: 1,
+                overflow: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+                WebkitOverflowScrolling: 'touch'
             }}>
-                {inventoryTypes.map((type, index) => {
-                    const count = currentSelectedItems[type.id] || 0;
-                    const maxAvailable = availability[type.id] || 0;
-                    const remainingAvailable = Math.max(0, maxAvailable - count); // Оставшееся количество после выбора
-                    const isSingleItem = inventoryTypes.length === 1;
-                    
-                    // Отладочная информация
-                    console.log(`[InventorySelector] Type: ${type.display_name}`, {
-                        typeId: type.id,
-                        available_count: type.available_count,
-                        maxAvailable,
-                        count,
-                        remainingAvailable,
-                        availability: availability[type.id]
-                    });
-                    
-                    return (
-                        <motion.div 
-                            key={type.id}
-                            initial={{ 
-                                opacity: 0, 
-                                y: isSingleItem ? 30 : 20,
-                                scale: isSingleItem ? 0.95 : 1
-                            }}
-                            animate={shakeCard === type.id ? {
-                                x: [-10, 10, -10, 10, 0],
-                                opacity: 1,
-                                y: 0,
-                                scale: 1
-                            } : { 
-                                opacity: 1, 
-                                y: 0,
-                                x: 0,
-                                scale: 1
-                            }}
-                            transition={shakeCard === type.id ? {
-                                duration: 0.6,
-                                ease: "easeInOut"
-                            } : { 
-                                delay: isSingleItem ? 0.2 : index * 0.1, 
-                                duration: isSingleItem ? 0.6 : 0.4,
-                                type: isSingleItem ? "spring" : "tween",
-                                stiffness: isSingleItem ? 200 : 400,
-                                damping: isSingleItem ? 20 : 25
-                            }}
-                            whileHover={{ 
-                                scale: isSingleItem ? 1.03 : 1.02,
-                                boxShadow: count > 0 
-                                    ? `0 ${isSingleItem ? 12 : 8}px ${isSingleItem ? 35 : 25}px ${type.color || '#007AFF'}${isSingleItem ? '40' : '33'}` 
-                                    : `0 ${isSingleItem ? 12 : 8}px ${isSingleItem ? 35 : 25}px rgba(255, 255, 255, ${isSingleItem ? '0.15' : '0.1'})`
-                            }}
-                            style={{
-                                display: 'flex',
-                                flexDirection: isMobile || isSingleItem ? 'row' : 'column',
-                                alignItems: 'center',
-                                backgroundColor: isSingleItem ? '#2E2E30' : '#2C2C2E',
-                                borderRadius: isMobile ? 8 : (isSingleItem ? 16 : 12),
-                                padding: isMobile ? (isSingleItem ? 20 : 16) : (isSingleItem ? 24 : 16),
-                                minWidth: isMobile ? 'auto' : (isSingleItem ? 280 : 120),
-                                maxWidth: isSingleItem ? (isMobile ? '100%' : 400) : 'auto',
-                                flex: isMobile ? 'none' : (isSingleItem ? '0 0 auto' : '0 0 auto'),
-                                width: isMobile ? '100%' : 'auto',
-                                position: 'relative',
-                                border: count > 0 ? `${isSingleItem ? 3 : 2}px solid ${type.color || '#007AFF'}` : `${isSingleItem ? 3 : 2}px solid transparent`,
-                                justifyContent: (isMobile || isSingleItem) ? 'space-between' : 'center',
-                                // Дополнительные стили для одного элемента
-                                background: isSingleItem ? 
-                                    `linear-gradient(135deg, #2E2E30 0%, #2A2A2C 50%, #262628 100%)` : 
-                                    '#2C2C2E',
-                                boxShadow: isSingleItem ? 
-                                    '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)' : 
-                                    'none'
-                            }}>
-                            
-                            {/* Индикатор доступности */}
+                {/* Контейнер с инвентарем */}
+                <div style={{ 
+                    display: 'flex', 
+                    gap: isSmallMobile ? 12 : 16, 
+                    alignItems: 'stretch',
+                    justifyContent: 'stretch',
+                    flexWrap: 'wrap',
+                    flexDirection: 'column',
+                    flex: 1,
+                    minHeight: 0
+                }}>
+                    {inventoryTypes.map((type, index) => {
+                        const count = currentSelectedItems[type.id] || 0;
+                        const maxAvailable = availability[type.id] || 0;
+                        const remainingAvailable = Math.max(0, maxAvailable - count);
+                        const isSingleItem = inventoryTypes.length === 1;
+                        
+                        // Адаптивные размеры для карточки - более компактные для мобильных
+                        const cardPadding = isSmallMobile ? '12px' : isMobile ? '14px' : '20px';
+                        const cardMinHeight = isSmallMobile ? 70 : isMobile ? 75 : 80;
+                        const iconSize = isSmallMobile ? 28 : isMobile ? 32 : 40;
+                        const titleFontSize = isSmallMobile ? 14 : isMobile ? 15 : 16;
+                        const descriptionFontSize = isSmallMobile ? 11 : isMobile ? 12 : 12;
+                        const badgePadding = isSmallMobile ? '3px 6px' : isMobile ? '4px 8px' : '4px 8px';
+                        const badgeFontSize = isSmallMobile ? 9 : isMobile ? 11 : 11;
+                        
+                        return (
                             <motion.div 
-                                animate={(remainingAvailable === 0 && type.affects_availability) ? {
-                                    scale: [1, 1.1, 1],
-                                    backgroundColor: [type.color || '#007AFF', '#FF4D4F', type.color || '#007AFF']
-                                } : {}}
-                                transition={{ 
-                                    duration: 1.5, 
-                                    repeat: (remainingAvailable === 0 && type.affects_availability) ? Infinity : 0,
+                                key={type.id}
+                                initial={{ 
+                                    opacity: 0, 
+                                    y: 20,
+                                    scale: 0.95
+                                }}
+                                animate={shakeCard === type.id ? {
+                                    x: [-10, 10, -10, 10, 0],
+                                    opacity: 1,
+                                    y: 0,
+                                    scale: 1
+                                } : { 
+                                    opacity: 1, 
+                                    y: 0,
+                                    x: 0,
+                                    scale: 1
+                                }}
+                                transition={shakeCard === type.id ? {
+                                    duration: 0.6,
                                     ease: "easeInOut"
+                                } : { 
+                                    delay: index * 0.1, 
+                                    duration: 0.4,
+                                    type: "spring",
+                                    stiffness: 400,
+                                    damping: 25
+                                }}
+                                whileHover={{ 
+                                    scale: 1.02,
+                                    boxShadow: count > 0 
+                                        ? `0 8px 25px ${type.color || '#007AFF'}33` 
+                                        : `0 8px 25px rgba(255, 255, 255, 0.1)`
                                 }}
                                 style={{
-                                    position: 'absolute',
-                                    top: isMobile ? 6 : (isSingleItem ? 12 : 8),
-                                    right: isMobile ? 6 : (isSingleItem ? 12 : 8),
-                                    backgroundColor: (remainingAvailable === 0 && type.affects_availability) ? '#FF4D4F' : 
-                                                   (remainingAvailable === 0 && !type.affects_availability) ? '#FF9500' : 
-                                                   (type.color || '#007AFF'),
-                                    color: '#fff',
-                                    borderRadius: isMobile ? 6 : (isSingleItem ? 10 : 8),
-                                    padding: isMobile ? '1px 4px' : (isSingleItem ? '4px 8px' : '2px 6px'),
-                                    fontSize: isMobile ? 10 : (isSingleItem ? 13 : 11),
-                                    fontWeight: 600,
-                                    boxShadow: isSingleItem ? '0 2px 8px rgba(0, 0, 0, 0.3)' : 'none',
-                                    // Дополнительный эффект для одного элемента
-                                    background: isSingleItem ? 
-                                        `linear-gradient(135deg, ${remainingAvailable === 0 ? '#FF4D4F' : (type.color || '#007AFF')}, ${remainingAvailable === 0 ? '#FF4D4F' : (type.color || '#007AFF')}CC)` :
-                                        (remainingAvailable === 0 ? '#FF4D4F' : (type.color || '#007AFF'))
-                                }}
-                            >
-                                {isSingleItem ? `${remainingAvailable} шт` : remainingAvailable}
-                            </motion.div>
+                                    display: 'flex',
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: '#2C2C2E',
+                                    borderRadius: 16,
+                                    padding: cardPadding,
+                                    width: '100%',
+                                    minHeight: cardMinHeight,
+                                    position: 'relative',
+                                    border: count > 0 ? `2px solid ${type.color || '#007AFF'}` : `2px solid transparent`,
+                                    justifyContent: 'space-between',
+                                    background: `linear-gradient(135deg, #2C2C2E 0%, #2A2A2C 50%, #262628 100%)`,
+                                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
+                                    userSelect: 'none',
+                                    WebkitUserSelect: 'none',
+                                    MozUserSelect: 'none',
+                                    msUserSelect: 'none',
+                                    WebkitTouchCallout: 'none',
+                                    WebkitTapHighlightColor: 'transparent',
+                                    flex: isSingleItem ? 1 : 'none',
+                                    marginBottom: index < inventoryTypes.length - 1 ? (isSmallMobile ? 12 : 16) : 0,
+                                    boxSizing: 'border-box'
+                                }}>
+                                    
+                                    {/* Индикатор доступности */}
+                                    <motion.div 
+                                        animate={(remainingAvailable === 0 && type.affects_availability) ? {
+                                            scale: [1, 1.1, 1],
+                                            backgroundColor: [type.color || '#007AFF', '#FF4D4F', type.color || '#007AFF']
+                                        } : {}}
+                                        transition={{ 
+                                            duration: 1.5, 
+                                            repeat: (remainingAvailable === 0 && type.affects_availability) ? Infinity : 0,
+                                            ease: "easeInOut"
+                                        }}
+                                        style={{
+                                            position: 'absolute',
+                                            top: isSmallMobile ? 8 : 12,
+                                            right: isSmallMobile ? 8 : 12,
+                                            backgroundColor: (remainingAvailable === 0 && type.affects_availability) ? '#FF4D4F' : 
+                                                           (remainingAvailable === 0 && !type.affects_availability) ? '#FF9500' : 
+                                                           (type.color || '#007AFF'),
+                                            color: '#fff',
+                                            borderRadius: isSmallMobile ? 8 : 10,
+                                            padding: badgePadding,
+                                            fontSize: badgeFontSize,
+                                            fontWeight: 600,
+                                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                                            background: `linear-gradient(135deg, ${remainingAvailable === 0 ? '#FF4D4F' : (type.color || '#007AFF')}, ${remainingAvailable === 0 ? '#FF4D4F' : (type.color || '#007AFF')}CC)`,
+                                            zIndex: 1
+                                        }}
+                                    >
+                                        {`${remainingAvailable} шт`}
+                                    </motion.div>
 
-                            {/* Дополнительный декоративный элемент для одного элемента */}
-                            {isSingleItem && (
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0 }}
-                                    animate={{ opacity: 0.6, scale: 1 }}
-                                    transition={{ delay: 0.4, duration: 0.5 }}
-                                    style={{
-                                        position: 'absolute',
-                                        top: isMobile ? 6 : 12,
-                                        left: isMobile ? 6 : 12,
-                                        width: 8,
-                                        height: 8,
-                                        borderRadius: '50%',
-                                        background: `linear-gradient(45deg, ${type.color || '#007AFF'}, #fff)`,
-                                        boxShadow: '0 0 10px rgba(255, 255, 255, 0.3)'
-                                    }}
-                                />
-                            )}
+                                    {/* Левая часть - иконка и название */}
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: isSmallMobile ? 8 : isMobile ? 12 : 16,
+                                        flex: 1,
+                                        minWidth: 0,
+                                        paddingRight: isSmallMobile ? '50px' : '70px' // Отступ для бейджа
+                                    }}>
+                                        {/* Иконка */}
+                                        <div style={{
+                                            fontSize: iconSize,
+                                            filter: remainingAvailable === 0 ? 'grayscale(100%) opacity(0.5)' : 'none',
+                                            textShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                                            flexShrink: 0,
+                                            lineHeight: 1
+                                        }}>
+                                            {type.icon_name || '📦'}
+                                        </div>
+                                        
+                                        {/* Название и описание */}
+                                        <div style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'flex-start',
+                                            flex: 1,
+                                            minWidth: 0,
+                                            gap: type.description ? 4 : 0
+                                        }}>
+                                            <div style={{
+                                                color: remainingAvailable === 0 ? '#86868B' : '#fff',
+                                                fontSize: titleFontSize,
+                                                fontWeight: 600,
+                                                textAlign: 'left',
+                                                textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)',
+                                                wordBreak: 'break-word',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                                width: '100%',
+                                                lineHeight: 1.2
+                                            }}>
+                                                {type.display_name}
+                                            </div>
+                                            
+                                            {/* Дополнительное описание */}
+                                            {type.description && (
+                                                <div style={{
+                                                    color: '#86868B',
+                                                    fontSize: descriptionFontSize,
+                                                    fontWeight: 400,
+                                                    textAlign: 'left',
+                                                    wordBreak: 'break-word',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    display: '-webkit-box',
+                                                    WebkitLineClamp: isSmallMobile ? 1 : 2,
+                                                    WebkitBoxOrient: 'vertical',
+                                                    lineHeight: 1.3,
+                                                    width: '100%'
+                                                }}>
+                                                    {type.description}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
 
-                            {/* Левая часть - иконка и название */}
+                                    {/* Правая часть - счетчик */}
+                                    <div style={{
+                                        flexShrink: 0
+                                    }}>
+                                        <CounterComponent
+                                            count={count}
+                                            onDecrease={() => handleChange(type.id, -1)}
+                                            onIncrease={() => handleChange(type.id, 1)}
+                                            canDecrease={count > 0}
+                                            canIncrease={remainingAvailable > 0}
+                                        />
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Компактная информация о добавлении нового инвентаря только для десктопа */}
+                    {!isMobile && (
+                        <div style={{
+                            marginTop: 20,
+                            padding: '16px',
+                            backgroundColor: '#1C1C1E',
+                            borderRadius: 16,
+                            border: '1px solid #3C3C3E',
+                            display: 'flex',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 16,
+                            flexShrink: 0
+                        }}>
                             <div style={{
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: isMobile ? 12 : (isSingleItem ? 20 : 0),
-                                flexDirection: (isMobile || isSingleItem) ? 'row' : 'column'
+                                gap: 16,
+                                flex: 1,
+                                minWidth: 0
                             }}>
-                                {/* Иконка */}
+                                <div style={{ 
+                                    fontSize: 20,
+                                    flexShrink: 0
+                                }}>💡</div>
                                 <div style={{
-                                    fontSize: isMobile ? 32 : (isSingleItem ? 56 : 40),
-                                    marginBottom: (isMobile || isSingleItem) ? 0 : 8,
-                                    filter: remainingAvailable === 0 ? 'grayscale(100%) opacity(0.5)' : 'none',
-                                    // Добавляем тень для одного элемента
-                                    textShadow: isSingleItem ? '0 2px 8px rgba(0, 0, 0, 0.3)' : 'none'
-                                }}>
-                                    {type.icon_name || '📦'}
-                                </div>
-                                
-                                {/* Название и описание */}
-                                <div style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: (isMobile || isSingleItem) ? 'flex-start' : 'center'
+                                    flex: 1,
+                                    minWidth: 0
                                 }}>
                                     <div style={{
-                                        color: remainingAvailable === 0 ? '#86868B' : '#fff',
-                                        fontSize: isMobile ? 14 : (isSingleItem ? 20 : 14),
-                                        fontWeight: isSingleItem ? 600 : 500,
-                                        marginBottom: (isMobile || !isSingleItem) ? 0 : 4,
-                                        textAlign: (isMobile || isSingleItem) ? 'left' : 'center',
-                                        textShadow: isSingleItem ? '0 1px 2px rgba(0, 0, 0, 0.5)' : 'none'
+                                        color: '#fff',
+                                        fontSize: 14,
+                                        fontWeight: 500,
+                                        marginBottom: 4,
+                                        wordBreak: 'break-word',
+                                        lineHeight: 1.2
                                     }}>
-                                        {type.display_name}
+                                        Нужен другой тип инвентаря?
                                     </div>
-                                    
-                                    {/* Дополнительное описание для одного элемента */}
-                                    {isSingleItem && type.description && (
-                                        <div style={{
-                                            color: '#86868B',
-                                            fontSize: isMobile ? 12 : 14,
-                                            fontWeight: 400,
-                                            marginTop: 2,
-                                            textAlign: 'left'
-                                        }}>
-                                            {type.description}
-                                        </div>
-                                    )}
+                                    <div style={{
+                                        color: '#86868B',
+                                        fontSize: 12,
+                                        wordBreak: 'break-word',
+                                        lineHeight: 1.3
+                                    }}>
+                                        Добавьте новые типы инвентаря в систему
+                                    </div>
                                 </div>
                             </div>
-
-                            {/* Правая часть - счетчик */}
-                            <div style={{
-                                // Для одного элемента делаем счетчик крупнее
-                                transform: isSingleItem ? 'scale(1.2)' : 'scale(1)'
-                            }}>
-                                <CounterComponent
-                                    count={count}
-                                    onDecrease={() => handleChange(type.id, -1)}
-                                    onIncrease={() => handleChange(type.id, 1)}
-                                    canDecrease={count > 0}
-                                    canIncrease={remainingAvailable > 0}
-                                />
-                            </div>
-                        </motion.div>
-                    );
-                })}
-            </div>
-
-            {/* Информация о добавлении нового инвентаря */}
-            <div style={{
-                marginTop: 16,
-                padding: isMobile ? 12 : 16,
-                backgroundColor: '#1C1C1E',
-                borderRadius: 8,
-                border: '1px solid #3C3C3E',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12
-            }}>
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    flex: 1
-                }}>
-                    <div style={{ fontSize: 20 }}>💡</div>
-                    <div>
-                        <div style={{
-                            color: '#fff',
-                            fontSize: isMobile ? 13 : 14,
-                            fontWeight: 500,
-                            marginBottom: 2
-                        }}>
-                            Нужен другой тип инвентаря?
+                            
+                            <motion.button
+                                whileHover={{ 
+                                    scale: 1.05,
+                                    backgroundColor: '#34C759',
+                                    boxShadow: '0 4px 15px rgba(52, 199, 89, 0.3)'
+                                }}
+                                whileTap={{ scale: 0.95 }}
+                                transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                                onClick={handleManageInventory}
+                                style={{
+                                    background: 'linear-gradient(135deg, #30D158 0%, #28A745 100%)',
+                                    border: 'none',
+                                    borderRadius: 12,
+                                    padding: '12px 16px',
+                                    color: '#fff',
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 8,
+                                    boxShadow: '0 2px 8px rgba(52, 199, 89, 0.2)',
+                                    userSelect: 'none',
+                                    WebkitUserSelect: 'none',
+                                    MozUserSelect: 'none',
+                                    msUserSelect: 'none',
+                                    WebkitTouchCallout: 'none',
+                                    WebkitTapHighlightColor: 'transparent',
+                                    touchAction: 'manipulation',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0
+                                }}
+                            >
+                                <span style={{ fontSize: 14 }}>➕</span>
+                                Добавить новый
+                            </motion.button>
                         </div>
-                        <div style={{
-                            color: '#86868B',
-                            fontSize: isMobile ? 11 : 12
-                        }}>
-                            Добавьте новые типы инвентаря в систему
-                        </div>
-                    </div>
+                    )}
+                {/* Закрываем прокручиваемый контейнер */}
                 </div>
                 
-                <motion.button
-                    whileHover={{ 
-                        scale: 1.05,
-                        backgroundColor: '#34C759',
-                        boxShadow: '0 4px 15px rgba(52, 199, 89, 0.3)'
-                    }}
-                    whileTap={{ scale: 0.95 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                    onClick={handleManageInventory}
-                    style={{
-                        background: 'linear-gradient(135deg, #30D158 0%, #28A745 100%)',
-                        border: 'none',
-                        borderRadius: 6,
-                        padding: isMobile ? '8px 12px' : '10px 16px',
-                        color: '#fff',
-                        fontSize: isMobile ? 12 : 13,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        boxShadow: '0 2px 8px rgba(52, 199, 89, 0.2)',
-                        userSelect: 'none',
-                        WebkitUserSelect: 'none',
-                        MozUserSelect: 'none',
-                        msUserSelect: 'none',
-                        WebkitTouchCallout: 'none',
-                        WebkitTapHighlightColor: 'transparent'
-                    }}
-                >
-                    <span style={{ fontSize: isMobile ? 12 : 14 }}>➕</span>
-                    {isMobile ? 'Добавить' : 'Добавить новый'}
-                </motion.button>
-            </div>
 
-            {/* Ошибка если есть */}
-            {error && (
-                <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    style={{
-                        marginTop: 12,
-                        padding: 12,
-                        backgroundColor: '#FF4D4F20',
-                        border: '1px solid #FF4D4F',
-                        borderRadius: 8,
-                        color: '#FF4D4F',
-                        fontSize: 14
-                    }}
-                >
-                    {error}
-                </motion.div>
-            )}
-
+            
             {/* Модал управления инвентарем */}
-            <DesktopInventoryModal
-                isOpen={isInventoryModalOpen}
-                onClose={handleInventoryModalClose}
-            />
+            {isInventoryModalOpen && (
+                <DesktopInventoryModal
+                    isOpen={isInventoryModalOpen}
+                    onClose={handleInventoryModalClose}
+                />
+            )}
+            
+            {/* Мобильный модал управления инвентарем */}
+            {isMobileInventoryModalOpen && (
+                <MobileInventoryModal
+                    isOpen={isMobileInventoryModalOpen}
+                    onClose={handleInventoryModalClose}
+                />
+            )}
         </div>
     );
-};
-
-// Универсальный компонент InventorySelector
-const InventorySelector: React.FC<InventorySelectorProps> = (props) => {
-    if (isLegacyProps(props)) {
-        // Используем legacy адаптер для старых форм
-        return <LegacyInventorySelectorAdapter {...props} />;
-    } else {
-        // Используем новый компонент для новой системы инвентаря
-        return <NewInventorySelector {...props} />;
-    }
 };
 
 export default InventorySelector; 

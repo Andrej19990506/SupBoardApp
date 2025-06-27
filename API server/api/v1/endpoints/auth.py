@@ -876,6 +876,7 @@ async def authenticate_telegram(
 async def authenticate_google(
     google_data: dict,
     response: Response,
+    request: Request,
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -977,9 +978,41 @@ async def authenticate_google(
             user = await user_crud.create_user(db, user_in=user_data)
             print(f"Created new user: {user.id}")
         
-        # Генерируем токены
-        access_token = f"google_token_{user.id}_{int(datetime.now().timestamp())}"
-        refresh_token = f"refresh_{user.id}_{int(datetime.now().timestamp())}"
+        # 🛡️ СОЗДАЕМ SECURE SESSION
+        refresh_token = security_service.generate_secure_token(32)
+        print(f"🔍 [google-auth] Создаем secure session для user_id: {user.id}")
+        try:
+            # Создаем сессию устройства
+            device_session = await security_service.create_secure_session(
+                db=db,
+                user=user,
+                request=request,
+                refresh_token=refresh_token
+            )
+            print(f"✅ [google-auth] Создана secure session: ID={device_session.id}")
+            logger.info(f"✅ [google-auth] Создана secure session: ID={device_session.id}")
+            
+            # Обновляем информацию о последнем входе пользователя
+            await security_service.update_user_login_info(db, user, request)
+            
+            # Анализируем риски входа
+            risk_analysis = await security_service.analyze_login_risk(db, user, request)
+            logger.info(f"🔍 [google-auth] Risk analysis: {risk_analysis}")
+        except Exception as security_error:
+            print(f"❌ [google-auth] Ошибка создания secure session: {security_error}")
+            logger.error(f"❌ [google-auth] Ошибка создания secure session: {security_error}")
+            import traceback
+            print(f"❌ [google-auth] Traceback: {traceback.format_exc()}")
+            # Продолжаем с обычными токенами в случае ошибки
+        
+        # Генерируем правильный JWT access token
+        access_token_data = {
+            "sub": str(user.id),
+            "phone": user.phone,
+            "name": user.name,
+            "provider": "google"
+        }
+        access_token = create_access_token(data=access_token_data)
         
         print(f"Generated tokens for user {user.id}")
         
@@ -1031,6 +1064,7 @@ async def authenticate_google(
 async def authenticate_vk(
     vk_data: dict,
     response: Response,
+    request: Request,
     db: AsyncSession = Depends(get_db_session)
 ):
     """
@@ -1143,9 +1177,41 @@ async def authenticate_vk(
             user = await user_crud.create_user(db, user_in=user_data)
             print(f"Created new VK user: {user.id}")
         
-        # Генерируем токены
-        access_token = f"vk_token_{user.id}_{int(datetime.now().timestamp())}"
-        refresh_token = f"refresh_{user.id}_{int(datetime.now().timestamp())}"
+        # 🛡️ СОЗДАЕМ SECURE SESSION
+        refresh_token = security_service.generate_secure_token(32)
+        print(f"🔍 [vk-auth] Создаем secure session для user_id: {user.id}")
+        try:
+            # Создаем сессию устройства
+            device_session = await security_service.create_secure_session(
+                db=db,
+                user=user,
+                request=request,
+                refresh_token=refresh_token
+            )
+            print(f"✅ [vk-auth] Создана secure session: ID={device_session.id}")
+            logger.info(f"✅ [vk-auth] Создана secure session: ID={device_session.id}")
+            
+            # Обновляем информацию о последнем входе пользователя
+            await security_service.update_user_login_info(db, user, request)
+            
+            # Анализируем риски входа
+            risk_analysis = await security_service.analyze_login_risk(db, user, request)
+            logger.info(f"🔍 [vk-auth] Risk analysis: {risk_analysis}")
+        except Exception as security_error:
+            print(f"❌ [vk-auth] Ошибка создания secure session: {security_error}")
+            logger.error(f"❌ [vk-auth] Ошибка создания secure session: {security_error}")
+            import traceback
+            print(f"❌ [vk-auth] Traceback: {traceback.format_exc()}")
+            # Продолжаем с обычными токенами в случае ошибки
+        
+        # Генерируем правильный JWT access token
+        access_token_data = {
+            "sub": str(user.id),
+            "phone": user.phone,
+            "name": user.name,
+            "provider": "vk"
+        }
+        access_token = create_access_token(data=access_token_data)
         
         print(f"Generated tokens for VK user {user.id}")
         

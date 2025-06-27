@@ -441,10 +441,11 @@ class AuthSecurityService:
         session.country = location_info["country"]
         session.city = location_info["city"]
         
-        await db.commit()
-        
         # Обновляем информацию о последнем входе в профиле пользователя
         await self.update_user_login_info(db, user, request)
+        
+        # Один общий commit в конце
+        await db.commit()
         
         logger.info(
             f"Создана сессия {session.id} для пользователя {user.id} "

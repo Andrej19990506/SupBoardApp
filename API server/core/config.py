@@ -108,9 +108,9 @@ class Settings(BaseSettings):
     def USE_SECURE_COOKIES(self) -> bool:
         """
         Определяет, нужно ли использовать secure cookies.
-        ВРЕМЕННО ОТКЛЮЧЕНО для тестирования мобильных устройств.
+        В production всегда True (HTTPS), в development - False для совместимости.
         """
-        return False  # Временно отключено для тестирования OAuth на мобильных
+        return self.ENVIRONMENT == "production"
 
     class Config:
         case_sensitive = True

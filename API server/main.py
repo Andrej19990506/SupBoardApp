@@ -78,10 +78,8 @@ app.add_middleware(
         "http://localhost", 
         "http://192.168.0.115:3000", 
         "http://192.168.0.115",
-        "https://dev-bot.appninjabot.ru",
-        "http://dev-bot.appninjabot.ru",
-        "https://subboard.appninjabot.ru",
-        "http://subboard.appninjabot.ru"
+        "https://supboardapp.ru",
+        "http://supboardapp.ru"
     ],
     allow_credentials=True,
     allow_methods=["*"],

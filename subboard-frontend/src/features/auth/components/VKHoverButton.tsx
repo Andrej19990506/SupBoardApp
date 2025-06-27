@@ -76,7 +76,7 @@ const VKHoverButton: React.FC<VKHoverButtonProps> = ({
 
         VKID.Config.init({
           app: 53780062,
-          redirectUrl: 'https://subboard.appninjabot.ru/auth/callback',
+          redirectUrl: 'https://supboardapp.ru/auth/vk/callback',
           responseMode: VKID.ConfigResponseMode.Callback,
           source: VKID.ConfigSource.LOWCODE,
           scope: 'vkid.personal_info email phone',

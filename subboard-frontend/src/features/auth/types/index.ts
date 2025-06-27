@@ -37,8 +37,15 @@ export interface AuthResponse {
 }
 
 export interface VKAuthData {
-  code: string;
+  // Данные от VK ID SDK
+  id_token?: string;
+  access_token?: string;
+  user_id?: string;
+  // Старые данные от OAuth flow (для обратной совместимости)
+  code?: string;
   state?: string;
+  // Дополнительные данные
+  [key: string]: any;
 }
 
 export interface TelegramAuthData {

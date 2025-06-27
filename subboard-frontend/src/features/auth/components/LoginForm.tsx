@@ -265,13 +265,74 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onForgotPassw
   };
 
   const handleVKAuth = () => {
-    // VK авторизация через перенаправление
+    // VK авторизация через VK ID SDK
     try {
-      const vkAuthUrl = authService.getVKAuthUrl();
-      window.location.href = vkAuthUrl;
+      // Проверяем готовность SDK
+      if (!(window as any).VKIDSDK) {
+        console.error('VK ID SDK не загружен');
+        alert('VK ID SDK не загружен. Попробуйте позже.');
+        return;
+      }
+
+      const VKID = (window as any).VKIDSDK;
+
+      // Инициализируем VK ID SDK
+      VKID.Config.init({
+        app: 53780062,
+        redirectUrl: 'https://supboardapp.ru/auth/vk/callback',
+        responseMode: VKID.ConfigResponseMode.Callback,
+        source: VKID.ConfigSource.LOWCODE,
+        scope: 'vkid.personal_info email phone',
+      });
+
+      // Создаем FloatingOneTap программно
+      const floatingOneTap = new VKID.FloatingOneTap();
+
+      floatingOneTap.render({
+        scheme: 'dark',
+        contentId: 6,
+        appName: 'SUPBoardsApp',
+        showAlternativeLogin: true
+      })
+      .on(VKID.WidgetEvents.ERROR, (error: any) => {
+        console.error('VK FloatingOneTap Error:', error);
+        alert('Ошибка VK авторизации. Попробуйте еще раз.');
+      })
+      .on(VKID.FloatingOneTapInternalEvents.LOGIN_SUCCESS, async function (payload: any) {
+        try {
+          const code = payload.code;
+          const deviceId = payload.device_id;
+
+          console.log('VK LOGIN_SUCCESS payload:', payload);
+
+          // Обмениваем код на токены
+          const data = await VKID.Auth.exchangeCode(code, deviceId);
+          console.log('VK exchangeCode result:', data);
+
+          // Закрываем FloatingOneTap
+          floatingOneTap.close();
+
+          // Отправляем данные на наш бэкенд
+          const result = await dispatch(authenticateWithVK({
+            id_token: data.id_token,
+            access_token: data.access_token,
+            user_id: data.user?.id,
+            ...data
+          }));
+
+          if (authenticateWithVK.fulfilled.match(result)) {
+            console.log('VK authentication successful');
+            onClose();
+          }
+        } catch (error) {
+          console.error('VK auth process error:', error);
+          floatingOneTap.close();
+          alert('Ошибка при обработке VK авторизации');
+        }
+      });
+
     } catch (error) {
       console.error('VK auth error:', error);
-      // Показываем ошибку пользователю
       alert('VK авторизация недоступна. Проверьте настройки.');
     }
   };

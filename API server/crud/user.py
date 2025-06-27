@@ -1,9 +1,9 @@
-from typing import Optional, List
+from typing import Optional, List, Union
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy import and_, or_, select
 from models.user import User
-from schemas.user import UserCreate, UserUpdate
+from schemas.user import UserCreate, UserCreateOAuth, UserUpdate
 from passlib.context import CryptContext
 from datetime import datetime
 
@@ -52,19 +52,26 @@ class CRUDUser:
         result = await db.execute(query)
         return result.scalars().all()
     
-    async def create_user(self, db: AsyncSession, user: UserCreate) -> User:
+    async def create_user(self, db: AsyncSession, user_in: Union[UserCreate, UserCreateOAuth]) -> User:
         """Создать нового пользователя"""
-        hashed_password = pwd_context.hash(user.password)
+        # Проверяем тип входных данных и обрабатываем пароль соответственно
+        if isinstance(user_in, UserCreateOAuth):
+            # OAuth пользователь - пароль не обязателен
+            hashed_password = pwd_context.hash("oauth_no_password") if not user_in.password else pwd_context.hash(user_in.password)
+        else:
+            # Обычный пользователь - пароль обязателен
+            hashed_password = pwd_context.hash(user_in.password)
         
         db_user = User(
-            name=user.name,
-            phone=user.phone,
-            email=user.email,
+            name=user_in.name,
+            phone=user_in.phone,
+            email=user_in.email,
             password_hash=hashed_password,
-            business_name=user.business_name,
-            business_description=user.business_description,
-            business_address=user.business_address,
-            business_phone=user.business_phone,
+            avatar=getattr(user_in, 'avatar', None),
+            business_name=getattr(user_in, 'business_name', None),
+            business_description=getattr(user_in, 'business_description', None),
+            business_address=getattr(user_in, 'business_address', None),
+            business_phone=getattr(user_in, 'business_phone', None),
             is_active=True
         )
         

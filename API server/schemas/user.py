@@ -29,6 +29,20 @@ class UserCreate(UserBase):
             raise ValueError('Неверный формат номера телефона')
         return v
 
+class UserCreateOAuth(UserBase):
+    """Схема для создания пользователей через OAuth (без пароля)"""
+    password: Optional[str] = None  # Пароль не обязателен для OAuth
+    
+    @validator('phone')
+    def validate_phone_oauth(cls, v):
+        # Более гибкая валидация для OAuth пользователей
+        import re
+        # Обычный российский номер или временные OAuth номера (+g..., +v..., +t...)
+        if not (re.match(r'^(\+7|8|7)?[\s\-]?\(?[489][0-9]{2}\)?[\s\-]?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}$', v) or
+                re.match(r'^\+[gvt]\d{10}$', v)):  # OAuth временные номера
+            raise ValueError('Неверный формат номера телефона')
+        return v
+
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None

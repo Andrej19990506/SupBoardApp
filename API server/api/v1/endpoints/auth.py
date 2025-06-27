@@ -5,7 +5,7 @@ from db.session import get_db_session
 from crud.user import user_crud
 from core.config import settings
 from schemas.customer import CustomerCreate
-from schemas.user import UserCreate
+from schemas.user import UserCreate, UserCreateOAuth
 from services.auth_security_service import AuthSecurityService
 from core.session_middleware import require_valid_session
 import random
@@ -952,7 +952,7 @@ async def authenticate_google(
             print(f"Using existing user: {user.id}")
         else:
             print("Creating new user...")
-            user_data = UserCreate(
+            user_data = UserCreateOAuth(
                 name=name or email.split('@')[0],
                 phone=phone,
                 email=email
@@ -1141,7 +1141,7 @@ async def authenticate_vk(
                 await db.refresh(existing_user)
         else:
             print("Creating new VK user...")
-            user_data = UserCreate(
+            user_data = UserCreateOAuth(
                 name=name,
                 phone=user_phone,
                 email=email,

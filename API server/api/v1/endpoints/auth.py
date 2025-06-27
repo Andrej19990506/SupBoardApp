@@ -1052,15 +1052,25 @@ async def authenticate_vk(
                 detail="Ошибка декодирования VK токена"
             )
 
-        # Поскольку VK ID SDK работает с фронтенда, а токен привязан к IP,
-        # мы не можем делать запросы к VK API с сервера.
-        # Используем только базовые данные из JWT токена
-        print(f"Using basic data from VK ID token for user_id: {user_id}")
-        first_name = f"VK User"
-        last_name = str(user_id)
-        avatar = None
-        phone = None
-        email = None
+        # Получаем дополнительную информацию о пользователе, переданную с фронтенда
+        user_info = vk_data.get('user_info')
+        print(f"VK user_info from frontend: {user_info}")
+        
+        if user_info:
+            first_name = user_info.get('first_name', 'VK User')
+            last_name = user_info.get('last_name', str(user_id))
+            avatar = user_info.get('avatar')
+            phone = user_info.get('phone')
+            email = user_info.get('email')
+            print(f"Using user data from VK ID SDK: {first_name} {last_name}")
+        else:
+            # Fallback к базовым данным
+            print(f"No user_info from frontend, using basic data for user_id: {user_id}")
+            first_name = f"VK User"
+            last_name = str(user_id)
+            avatar = None
+            phone = None
+            email = None
         
         if not user_id:
             raise HTTPException(

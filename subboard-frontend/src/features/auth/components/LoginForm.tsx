@@ -309,6 +309,24 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onForgotPassw
           const data = await VKID.Auth.exchangeCode(code, deviceId);
           console.log('VK exchangeCode result:', data);
 
+          // Получаем дополнительную информацию о пользователе из VK ID SDK
+          let userInfo = null;
+          try {
+            if (data.user) {
+              userInfo = {
+                id: data.user.id,
+                first_name: data.user.first_name,
+                last_name: data.user.last_name,
+                avatar: data.user.avatar,
+                phone: data.user.phone,
+                email: data.user.email
+              };
+              console.log('VK user info from SDK:', userInfo);
+            }
+          } catch (userInfoError) {
+            console.log('Could not get additional user info:', userInfoError);
+          }
+
           // Закрываем FloatingOneTap
           floatingOneTap.close();
 
@@ -317,6 +335,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onForgotPassw
             id_token: data.id_token,
             access_token: data.access_token,
             user_id: data.user?.id,
+            user_info: userInfo, // Передаем дополнительную информацию
             ...data
           }));
 

@@ -39,7 +39,7 @@ class UserCreateOAuth(UserBase):
         import re
         # Обычный российский номер или временные OAuth номера (+g..., +v..., +t...)
         if not (re.match(r'^(\+7|8|7)?[\s\-]?\(?[489][0-9]{2}\)?[\s\-]?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}$', v) or
-                re.match(r'^\+[gvt]\d{10}$', v)):  # OAuth временные номера
+                re.match(r'^\+[gvt]\d{6,15}$', v)):  # OAuth временные номера (от 6 до 15 цифр)
             raise ValueError('Неверный формат номера телефона')
         return v
 

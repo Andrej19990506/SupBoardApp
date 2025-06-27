@@ -1109,9 +1109,8 @@ async def authenticate_vk(
         if phone and phone.startswith('+'):
             user_phone = phone
         else:
-            # Используем сокращенный VK ID как телефон
-            short_vk_id = str(user_id)[-10:]  # Берем последние 10 цифр
-            user_phone = f"+v{short_vk_id}"  # Временный телефон для VK пользователей (макс 12 символов)
+            # Используем VK ID как временный телефон
+            user_phone = f"+v{user_id}"  # Временный телефон для VK пользователей
         
         print(f"Looking for existing VK client with phone: {user_phone}")
         existing_user = await user_crud.get_user_by_phone(db, phone=user_phone)

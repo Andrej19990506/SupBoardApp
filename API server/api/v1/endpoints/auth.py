@@ -1016,6 +1016,9 @@ async def authenticate_google(
         
         print(f"Generated tokens for user {user.id}")
         
+        # Обновляем объект user ПОСЛЕ всех операций с БД, чтобы избежать detached instance
+        await db.refresh(user)
+        
         # Формируем ответ
         user_data = {
             "id": str(user.id),

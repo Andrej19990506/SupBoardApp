@@ -1278,7 +1278,7 @@ async def register_user(
             password=request.password  # CRUD сам захеширует пароль
         )
         
-        client = await user_crud.create_user(db, user=user_data)
+        client = await user_crud.create_user(db, user_data)
         
         # 🔍 ПРОВЕРЯЕМ ЧТО СОХРАНИЛОСЬ В БД
         logger.info(f"🔍 [register] Сохранено в БД: ID={client.id}, Phone='{client.phone}', Name='{client.name}'")

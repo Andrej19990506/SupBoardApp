@@ -176,7 +176,7 @@ const AuthContainer = styled.div`
 const ModalContent = styled.div`
   position: relative;
   width: 100%;
-  max-width: 420px;
+  max-width: 900px;
   max-height: 90vh;
   overflow-y: auto;
   

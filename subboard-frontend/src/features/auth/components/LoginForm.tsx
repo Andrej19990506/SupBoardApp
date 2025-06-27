@@ -398,128 +398,162 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onForgotPassw
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3 }}
     >
-      {/* Логотип */}
-      <LogoContainer>
-        <AnimatedLogo size="medium" />
-        
-        <LogoText
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ 
-            duration: 0.5,
-            delay: 0.3,
-            ease: "easeOut"
-          }}
-        >
-          <MainTitle>SUPBoard</MainTitle>
-          <Subtitle>Система управления прокатом досок</Subtitle>
-        </LogoText>
-      </LogoContainer>
-
-      <FormHeader>
-        <FormTitle>Вход в систему</FormTitle>
-        <FormSubtitle>Войдите в свой аккаунт для продолжения</FormSubtitle>
-      </FormHeader>
-
-      {(error || smsError) && (
-        <ErrorMessage
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.2 }}
-        >
-          ⚠️ {error || smsError}
-        </ErrorMessage>
-      )}
-
-      <Form onSubmit={handleSubmit}>
-        {/* Скрытые поля-ловушки для обмана автозаполнения */}
-        <input type="text" name="username" style={{ display: 'none' }} autoComplete="username" tabIndex={-1} />
-        <input type="password" name="fake-password" style={{ display: 'none' }} autoComplete="current-password" tabIndex={-1} />
-        
-        {/* Поле номера телефона (всегда видимо) */}
-        <InputGroup>
-          <InputLabel>Номер телефона</InputLabel>
-                      <StyledInput
-              type="tel"
-              name="user-phone-number"
-              value={formData.phone}
-              onChange={handleInputChange}
-              placeholder="+7 (999) 999-99-99"
-              required
-              disabled={isLoading}
-              autoComplete="new-password"
-              data-form-type="other"
-              readOnly
-              onFocus={(e) => {
-                e.target.removeAttribute('readonly');
+      {/* Двухколоночный layout */}
+      <TwoColumnLayout>
+        {/* Левая колонка - Логотип + соцсети */}
+        <LeftColumn>
+          {/* Блок найденного аккаунта для десктопа */}
+          {phoneCheckResult?.exists && (
+            <DesktopUserFoundContainer
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ 
+                type: "spring", 
+                stiffness: 300, 
+                damping: 25,
+                duration: 0.5 
               }}
-            />
-          {/* Индикатор статуса проверки номера для SMS режима */}
-          {loginMode === 'sms' && formData.phone && formData.phone.replace(/\D/g, '').length === 11 && (
-            <PhoneStatusContainer>
-              {isCheckingPhone ? (
-                <PhoneStatusChecking>
-                  <Spinner style={{ width: '16px', height: '16px' }} />
-                  Проверяем номер...
-                </PhoneStatusChecking>
-              ) : phoneCheckResult?.exists ? (
-                <PhoneStatusSuccess>
-                  <UserFoundCard
-                    initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    transition={{ 
-                      type: "spring", 
-                      stiffness: 200, 
-                      damping: 20,
-                      duration: 0.4 
-                    }}
-                  >
-                    <UserAvatar>
-                      {phoneCheckResult.userAvatar ? (
-                        <AvatarImage 
-                          src={`${import.meta.env.VITE_APP_API_URL || 'http://localhost:8000'}${phoneCheckResult.userAvatar}`}
-                          alt={phoneCheckResult.userName || 'Пользователь'}
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const placeholder = target.nextElementSibling as HTMLElement;
-                            if (placeholder) {
-                              placeholder.style.display = 'flex';
-                            }
-                          }}
-                        />
-                      ) : null}
-                      <AvatarPlaceholder style={{ display: phoneCheckResult.userAvatar ? 'none' : 'flex' }}>
-                        {(phoneCheckResult.userName || 'У').charAt(0).toUpperCase()}
-                      </AvatarPlaceholder>
-                    </UserAvatar>
-                    <UserInfo>
-                      <UserFoundText>Найден аккаунт</UserFoundText>
-                      <UserName>{phoneCheckResult.userName}</UserName>
-                    </UserInfo>
-                    <CheckIcon>✓</CheckIcon>
-                  </UserFoundCard>
-                </PhoneStatusSuccess>
-              ) : phoneCheckResult?.exists === false ? (
-                <PhoneStatusError>
-                  ❌ Пользователь не найден. Попробуйте зарегистрироваться
-                </PhoneStatusError>
-              ) : null}
-            </PhoneStatusContainer>
+            >
+              <UserFoundCard
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ 
+                  type: "spring", 
+                  stiffness: 300, 
+                  damping: 20,
+                  duration: 0.2,
+                  delay: 0.1
+                }}
+              >
+                <UserAvatar>
+                  {phoneCheckResult.userAvatar ? (
+                    <AvatarImage 
+                      src={`${import.meta.env.VITE_APP_API_URL || 'http://localhost:8000'}${phoneCheckResult.userAvatar}`}
+                      alt={phoneCheckResult.userName || 'Пользователь'}
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const placeholder = target.nextElementSibling as HTMLElement;
+                        if (placeholder) {
+                          placeholder.style.display = 'flex';
+                        }
+                      }}
+                    />
+                  ) : null}
+                  <AvatarPlaceholder style={{ display: phoneCheckResult.userAvatar ? 'none' : 'flex' }}>
+                    {(phoneCheckResult.userName || 'У').charAt(0).toUpperCase()}
+                  </AvatarPlaceholder>
+                </UserAvatar>
+                <UserInfo>
+                  <UserFoundText>Найден аккаунт</UserFoundText>
+                  <UserName>{phoneCheckResult.userName}</UserName>
+                </UserInfo>
+                <CheckIcon>✓</CheckIcon>
+              </UserFoundCard>
+            </DesktopUserFoundContainer>
           )}
-        </InputGroup>
 
-        {/* Поле пароля (только в режиме пароля) */}
-        {loginMode === 'password' && (
-          <InputGroup>
-            <InputLabel>Пароль</InputLabel>
-            <PasswordContainer>
-              <StyledInput
-                type={showPassword ? 'text' : 'password'}
-                name="user-auth-password"
-                value={formData.password}
+          <LogoContainer>
+            <AnimatedLogo size="medium" />
+            
+            <LogoText
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ 
+                duration: 0.5,
+                delay: 0.3,
+                ease: "easeOut"
+              }}
+            >
+              <MainTitle>SUPBoard</MainTitle>
+              <Subtitle>Система управления прокатом досок</Subtitle>
+            </LogoText>
+          </LogoContainer>
+
+          {/* Социальные кнопки */}
+          <SocialSection>
+            <SocialTitle>или войти через</SocialTitle>
+            <SocialButtons>
+              <SocialButton
+                onClick={handleVKAuth}
+                disabled={isLoading}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <VKIcon />
+              </SocialButton>
+              
+              <SocialButton
+                onClick={handleTelegramAuth}
+                disabled={isLoading}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <TelegramIcon />
+              </SocialButton>
+              
+              <SocialButton
+                onClick={handleGoogleLogin}
+                disabled={isLoading}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <GoogleIcon />
+              </SocialButton>
+            </SocialButtons>
+          </SocialSection>
+        </LeftColumn>
+
+        {/* Правая колонка - Форма входа */}
+        <RightColumn>
+          {/* Логотип для экранов меньше 940px */}
+          <MobileLogoContainer>
+            <AnimatedLogo size="medium" />
+            
+            <LogoText
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ 
+                duration: 0.5,
+                delay: 0.3,
+                ease: "easeOut"
+              }}
+            >
+              <MainTitle>SUPBoard</MainTitle>
+              <Subtitle>Система управления прокатом досок</Subtitle>
+            </LogoText>
+          </MobileLogoContainer>
+
+          <FormHeader>
+            <FormTitle>Вход в систему</FormTitle>
+            <FormSubtitle>Войдите в свой аккаунт для продолжения</FormSubtitle>
+          </FormHeader>
+
+          {(error || smsError) && (
+            <ErrorMessage
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.2 }}
+            >
+              ⚠️ {error || smsError}
+            </ErrorMessage>
+          )}
+
+          <Form onSubmit={handleSubmit}>
+            {/* Скрытые поля-ловушки для обмана автозаполнения */}
+            <input type="text" name="username" style={{ display: 'none' }} autoComplete="username" tabIndex={-1} />
+            <input type="password" name="fake-password" style={{ display: 'none' }} autoComplete="current-password" tabIndex={-1} />
+            
+            {/* Поле номера телефона (всегда видимо) */}
+            <InputGroup>
+              <InputLabel>Номер телефона</InputLabel>
+                          <StyledInput
+                type="tel"
+                name="user-phone-number"
+                value={formData.phone}
                 onChange={handleInputChange}
-                placeholder="Введите пароль"
+                placeholder="+7 (999) 999-99-99"
                 required
                 disabled={isLoading}
                 autoComplete="new-password"
@@ -529,217 +563,266 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToRegister, onForgotPassw
                   e.target.removeAttribute('readonly');
                 }}
               />
-              <PasswordToggle
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                disabled={isLoading}
-              >
-                                 {showPassword ? 'Скрыть' : 'Показать'}
-              </PasswordToggle>
-            </PasswordContainer>
-          </InputGroup>
-        )}
-
-        {/* SMS код (только в SMS режиме и на втором шаге) */}
-        {loginMode === 'sms' && smsStep === 'code' && (
-          <InputGroup>
-            <InputLabel>
-              SMS код отправлен на {formData.phone}
-              <BackButton 
-                type="button" 
-                onClick={() => {
-                  setSmsStep('phone');
-                  setSmsCode('');
-                  setCountdown(0);
-                  setSmsError('');
-                }}
-              >
-                Изменить номер
-              </BackButton>
-            </InputLabel>
-            <StyledInput
-              type="text"
-              name="smsCode"
-              value={smsCode}
-              onChange={(e) => {
-                const value = e.target.value.replace(/\D/g, '').slice(0, 4);
-                setSmsCode(value);
-              }}
-              placeholder="Введите 4-значный код"
-              maxLength={4}
-              required
-              disabled={isLoading}
-              autoFocus
-            />
-            {countdown > 0 ? (
-              <CountdownText>
-                Запросить новый код можно через {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
-              </CountdownText>
-            ) : (
-              <ResendButton
-                type="button"
-                onClick={async () => {
-                  try {
-                    setSmsError('');
-                    const response = await authService.sendSMSCode(formData.phone);
-                    if (response.success) {
-                      setSmsCode('');
-                      startCountdown();
-                    }
-                  } catch (error: any) {
-                    setSmsError(error.response?.data?.detail || 'Ошибка отправки SMS');
-                  }
-                }}
-              >
-                📱 Отправить новый код
-              </ResendButton>
-            )}
-          </InputGroup>
-        )}
-
-        {/* Кнопка "Войти через пароль" */}
-        {loginMode === 'sms' && smsStep === 'phone' && (
-          <PasswordModeButton
-            type="button"
-            onClick={() => {
-              setLoginMode('password');
-              setSmsError('');
-              setPhoneCheckResult(null);
-            }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            Войти через пароль
-          </PasswordModeButton>
-        )}
-
-        {/* Кнопка "Назад к SMS" */}
-        {loginMode === 'password' && (
-          <BackToSMSButton
-            type="button"
-            onClick={() => {
-              setLoginMode('sms');
-              setSmsError('');
-              setFormData(prev => ({ ...prev, password: '' }));
-            }}
-          >
-            ← Назад к SMS коду
-          </BackToSMSButton>
-        )}
-
-        {/* Чекбокс "Сохранить вход" */}
-        <RememberMeContainer>
-          <RememberMeCheckbox>
-            <CheckboxInput
-              type="checkbox"
-              id="rememberMe"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-            />
-            <CheckboxCustom $checked={rememberMe}>
-              {rememberMe && (
-                <CheckboxIcon>✓</CheckboxIcon>
+              {/* Индикатор статуса проверки номера для SMS режима */}
+              {loginMode === 'sms' && formData.phone && formData.phone.replace(/\D/g, '').length === 11 && phoneCheckResult?.exists === false && (
+                <PhoneStatusContainer>
+                  <PhoneStatusError>
+                    ❌ Пользователь не найден. Попробуйте зарегистрироваться
+                  </PhoneStatusError>
+                </PhoneStatusContainer>
               )}
-            </CheckboxCustom>
-            <CheckboxLabel htmlFor="rememberMe">
-              Сохранить вход
-            </CheckboxLabel>
-          </RememberMeCheckbox>
-        </RememberMeContainer>
 
-        <SubmitButton
-          type="submit"
-          disabled={
-            isLoading || 
-            isCheckingPhone ||
-            (loginMode === 'password' && (!formData.phone || !formData.password)) ||
-            (loginMode === 'sms' && smsStep === 'phone' && (!formData.phone || !phoneCheckResult?.exists)) || 
-            (loginMode === 'sms' && smsStep === 'code' && smsCode.length !== 4)
-          }
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          {isLoading ? (
-            <>
-              <Spinner />
-              {loginMode === 'password' ? 'Вход...' : (smsStep === 'phone' ? 'Отправка SMS...' : 'Проверка кода...')}
-            </>
-          ) : isCheckingPhone ? (
-            <>
-              <Spinner />
-              Проверка номера...
-            </>
-          ) : (
-            loginMode === 'password' ? 'Войти' : (smsStep === 'phone' ? 'Отправить SMS код' : 'Подтвердить код')
-          )}
-        </SubmitButton>
-      </Form>
+              {/* Мобильный блок найденного аккаунта - показывается только на экранах меньше 940px */}
+              {loginMode === 'sms' && phoneCheckResult?.exists && (
+                <MobilePhoneStatusContainer>
+                  <PhoneStatusSuccess>
+                    <UserFoundCard
+                      initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                    >
+                      <UserAvatar>
+                        {phoneCheckResult.userAvatar ? (
+                          <AvatarImage 
+                            src={`${import.meta.env.VITE_APP_API_URL || 'http://localhost:8000'}${phoneCheckResult.userAvatar}`}
+                            alt={phoneCheckResult.userName || 'Пользователь'}
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              const placeholder = target.nextElementSibling as HTMLElement;
+                              if (placeholder) {
+                                placeholder.style.display = 'flex';
+                              }
+                            }}
+                          />
+                        ) : null}
+                        <AvatarPlaceholder style={{ display: phoneCheckResult.userAvatar ? 'none' : 'flex' }}>
+                          {(phoneCheckResult.userName || 'У').charAt(0).toUpperCase()}
+                        </AvatarPlaceholder>
+                      </UserAvatar>
+                      <UserInfo>
+                        <UserFoundText>Найден аккаунт</UserFoundText>
+                        <UserName>{phoneCheckResult.userName}</UserName>
+                      </UserInfo>
+                      <CheckIcon>✓</CheckIcon>
+                    </UserFoundCard>
+                  </PhoneStatusSuccess>
+                </MobilePhoneStatusContainer>
+              )}
+            </InputGroup>
 
-      <SocialSection>
-        <SocialDivider>
-          <SocialDividerLine />
-          <SocialTitle>или войти через</SocialTitle>
-          <SocialDividerLine />
-        </SocialDivider>
-        <SocialButtons>
-          <SocialIconButton
-            onClick={() => {
-              // VK авторизация
-              handleVKAuth();
-            }}
-            whileHover={{ 
-              scale: 1.05,
-              boxShadow: "0 8px 32px rgba(25, 118, 210, 0.4)"
-            }}
-            whileTap={{ scale: 0.98 }}
-            $bgColor="transparent"
-          >
-            <img src="/icons8-vk-circled.svg" alt="VK" width="40" height="40" />
-          </SocialIconButton>
+            {/* Поле пароля (только в режиме пароля) */}
+            {loginMode === 'password' && (
+              <InputGroup>
+                <InputLabel>Пароль</InputLabel>
+                <PasswordContainer>
+                  <StyledInput
+                    type={showPassword ? 'text' : 'password'}
+                    name="user-auth-password"
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    placeholder="Введите пароль"
+                    required
+                    disabled={isLoading}
+                    autoComplete="new-password"
+                    data-form-type="other"
+                    readOnly
+                    onFocus={(e) => {
+                      e.target.removeAttribute('readonly');
+                    }}
+                  />
+                  <PasswordToggle
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    disabled={isLoading}
+                  >
+                                     {showPassword ? 'Скрыть' : 'Показать'}
+                  </PasswordToggle>
+                </PasswordContainer>
+              </InputGroup>
+            )}
 
-          <SocialIconButton
-            onClick={() => {
-              // Создаем Telegram Login Widget динамически
-              handleTelegramAuth();
-            }}
-            whileHover={{ 
-              scale: 1.05,
-              boxShadow: "0 8px 32px rgba(41, 182, 246, 0.4)"
-            }}
-            whileTap={{ scale: 0.98 }}
-            $bgColor="transparent"
-          >
-            <img src="/icons8-telegram-app.svg" alt="Telegram" width="40" height="40" />
-          </SocialIconButton>
+            {/* SMS код (только в SMS режиме и на втором шаге) */}
+            {loginMode === 'sms' && smsStep === 'code' && (
+              <InputGroup>
+                <InputLabel>
+                  SMS код отправлен на {formData.phone}
+                  <BackButton 
+                    type="button" 
+                    onClick={() => {
+                      setSmsStep('phone');
+                      setSmsCode('');
+                      setCountdown(0);
+                      setSmsError('');
+                    }}
+                  >
+                    Изменить номер
+                  </BackButton>
+                </InputLabel>
+                <StyledInput
+                  type="text"
+                  name="smsCode"
+                  value={smsCode}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                    setSmsCode(value);
+                  }}
+                  placeholder="Введите 4-значный код"
+                  maxLength={4}
+                  required
+                  disabled={isLoading}
+                  autoFocus
+                />
+                {countdown > 0 ? (
+                  <CountdownText>
+                    Запросить новый код можно через {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
+                  </CountdownText>
+                ) : (
+                  <ResendButton
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        setSmsError('');
+                        const response = await authService.sendSMSCode(formData.phone);
+                        if (response.success) {
+                          setSmsCode('');
+                          startCountdown();
+                        }
+                      } catch (error: any) {
+                        setSmsError(error.response?.data?.detail || 'Ошибка отправки SMS');
+                      }
+                    }}
+                  >
+                    📱 Отправить новый код
+                  </ResendButton>
+                )}
+              </InputGroup>
+            )}
 
-          <SocialIconButton
-            onClick={handleGoogleLogin}
-            whileHover={{ 
-              scale: 1.05,
-              boxShadow: "0 8px 32px rgba(66, 133, 244, 0.3)"
-            }}
-            whileTap={{ scale: 0.98 }}
-            $bgColor="transparent"
-          >
-            <img src="/icons8-google.svg" alt="Google" width="40" height="40" />
-          </SocialIconButton>
-        </SocialButtons>
-      </SocialSection>
+            {/* Кнопка "Войти через пароль" */}
+            {loginMode === 'sms' && smsStep === 'phone' && (
+              <PasswordModeButton
+                type="button"
+                onClick={() => {
+                  setLoginMode('password');
+                  setSmsError('');
+                  setPhoneCheckResult(null);
+                }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                Войти через пароль
+              </PasswordModeButton>
+            )}
 
-      <FormFooter>
-        <FooterText>
-          Нет аккаунта?{' '}
-          <FooterLink onClick={onSwitchToRegister}>
-            Зарегистрироваться
-          </FooterLink>
-        </FooterText>
-        <FooterDivider>•</FooterDivider>
-        <FooterText>
-          <FooterLink onClick={onForgotPassword}>
-            Забыл пароль
-          </FooterLink>
-        </FooterText>
-      </FormFooter>
+            {/* Кнопка "Назад к SMS" */}
+            {loginMode === 'password' && (
+              <BackToSMSButton
+                type="button"
+                onClick={() => {
+                  setLoginMode('sms');
+                  setSmsError('');
+                  setFormData(prev => ({ ...prev, password: '' }));
+                }}
+              >
+                ← Назад к SMS коду
+              </BackToSMSButton>
+            )}
+
+            {/* Чекбокс "Сохранить вход" */}
+            <RememberMeContainer>
+              <RememberMeCheckbox>
+                <CheckboxInput
+                  type="checkbox"
+                  id="rememberMe"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <CheckboxCustom $checked={rememberMe}>
+                  {rememberMe && (
+                    <CheckboxIcon>✓</CheckboxIcon>
+                  )}
+                </CheckboxCustom>
+                <CheckboxLabel htmlFor="rememberMe">
+                  Сохранить вход
+                </CheckboxLabel>
+              </RememberMeCheckbox>
+            </RememberMeContainer>
+
+            <SubmitButton
+              type="submit"
+              disabled={
+                isLoading || 
+                (loginMode === 'password' && (!formData.phone || !formData.password)) ||
+                (loginMode === 'sms' && smsStep === 'phone' && (!formData.phone || !phoneCheckResult?.exists)) || 
+                (loginMode === 'sms' && smsStep === 'code' && smsCode.length !== 4)
+              }
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {isLoading ? (
+                <>
+                  <Spinner />
+                  {loginMode === 'password' ? 'Вход...' : (smsStep === 'phone' ? 'Отправка SMS...' : 'Проверка кода...')}
+                </>
+              ) : (
+                loginMode === 'password' ? 'Войти' : (smsStep === 'phone' ? 'Отправить SMS код' : 'Подтвердить код')
+              )}
+            </SubmitButton>
+          </Form>
+
+          {/* Социальные кнопки для экранов меньше 940px */}
+          <MobileSocialSection>
+            <SocialDivider>
+              <SocialDividerLine />
+              <SocialTitle>или войти через</SocialTitle>
+              <SocialDividerLine />
+            </SocialDivider>
+            <SocialButtons>
+              <SocialButton
+                onClick={handleVKAuth}
+                disabled={isLoading}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <VKIcon />
+              </SocialButton>
+              
+              <SocialButton
+                onClick={handleTelegramAuth}
+                disabled={isLoading}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <TelegramIcon />
+              </SocialButton>
+              
+              <SocialButton
+                onClick={handleGoogleLogin}
+                disabled={isLoading}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <GoogleIcon />
+              </SocialButton>
+            </SocialButtons>
+          </MobileSocialSection>
+
+          <FormFooter>
+            <FooterText>
+              Нет аккаунта?{' '}
+              <FooterLink onClick={onSwitchToRegister}>
+                Зарегистрироваться
+              </FooterLink>
+            </FooterText>
+            <FooterDivider>•</FooterDivider>
+            <FooterText>
+              <FooterLink onClick={onForgotPassword}>
+                Забыл пароль
+              </FooterLink>
+            </FooterText>
+          </FormFooter>
+        </RightColumn>
+      </TwoColumnLayout>
     </FormContainer>
   );
 };
@@ -760,11 +843,20 @@ const FormContainer = styled(motion.div)`
     0 10px 30px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.15),
     inset 0 -1px 0 rgba(255, 255, 255, 0.05);
-  padding: 36px;
+  padding: 0;
   width: 100%;
-  max-width: 420px;
+  max-width: 900px;
+  min-height: 600px;
   position: relative;
   overflow: hidden;
+  
+  /* Адаптация для экранов меньше 940px - возврат к одноколоночному виду */
+  @media (max-width: 940px) {
+    margin: 0 auto;
+    max-width: 420px;
+    min-height: auto;
+    padding: 36px;
+  }
   
   /* Мобильная адаптация */
   @media (max-width: 768px) {
@@ -1240,65 +1332,7 @@ const Spinner = styled.div`
   }
 `;
 
-const SocialSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 24px 0 20px 0;
-  
-  @media (max-width: 768px) {
-    margin: 20px 0 18px 0;
-  }
-  
-  @media (max-width: 480px) {
-    margin: 16px 0 16px 0;
-  }
-`;
 
-const SocialDivider = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
-  width: 100%;
-  
-  @media (max-width: 768px) {
-    gap: 14px;
-    margin-bottom: 18px;
-  }
-  
-  @media (max-width: 480px) {
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-`;
-
-const SocialDividerLine = styled.div`
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, 
-    transparent 0%, 
-    rgba(255, 255, 255, 0.2) 50%, 
-    transparent 100%
-  );
-`;
-
-const SocialTitle = styled.div`
-  color: rgba(255, 255, 255, 0.65);
-  font-size: 13px;
-  font-weight: 500;
-  text-align: center;
-  white-space: nowrap;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  
-  @media (max-width: 768px) {
-    font-size: 12px;
-  }
-  
-  @media (max-width: 480px) {
-    font-size: 11px;
-  }
-`;
 
 const SocialButtons = styled.div`
   display: flex;
@@ -1776,22 +1810,30 @@ const PhoneStatusContainer = styled.div`
   }
 `;
 
-const PhoneStatusChecking = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: inherit;
-  border-radius: inherit;
+// Контейнер для мобильного блока найденного аккаунта (только мобильные)
+const MobilePhoneStatusContainer = styled.div`
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  
+  /* Показывать только на мобильных - на десктопе блок в левой колонке */
+  @media (min-width: 941px) {
+    display: none;
+  }
   
   @media (max-width: 768px) {
-    gap: 6px;
+    margin-top: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
   }
   
   @media (max-width: 480px) {
-    gap: 4px;
+    margin-top: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
   }
 `;
 
@@ -1807,6 +1849,11 @@ const PhoneStatusSuccess = styled.div`
   box-shadow: 
     0 8px 32px rgba(0, 122, 255, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  
+  /* Скрыть на десктопе - показывается в левой колонке */
+  @media (min-width: 941px) {
+    display: none;
+  }
   
   @media (max-width: 768px) {
     border-radius: 14px;
@@ -2058,6 +2105,226 @@ const BackToSMSButton = styled.button`
     padding: 6px 12px;
     margin-bottom: 12px;
     gap: 3px;
+  }
+`;
+
+// Логотип для мобильных экранов (показывается только на экранах меньше 940px)
+const MobileLogoContainer = styled.div`
+  display: none;
+  
+  @media (max-width: 940px) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  
+  @media (max-width: 768px) {
+    margin-bottom: 28px;
+  }
+  
+  @media (max-width: 480px) {
+    margin-bottom: 24px;
+  }
+`;
+
+// Контейнер для найденного аккаунта в левой колонке (только десктоп)
+const DesktopUserFoundContainer = styled(motion.div)`
+  position: absolute;
+  top: 40px;
+  left: 20%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 280px;
+  z-index: 10;
+  
+  @media (max-width: 940px) {
+    display: none !important;
+  }
+`;
+
+// Компоненты для двухколоночного layout
+const TwoColumnLayout = styled.div`
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 600px;
+
+  @media (max-width: 940px) {
+    flex-direction: column;
+    min-height: auto;
+  }
+`;
+
+
+
+const RightColumn = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 60px 40px;
+
+  @media (max-width: 940px) {
+    padding: 10px 20px;
+    margin: 0 auto;
+  }
+`;
+
+const SocialSection = styled.div`
+  margin-top: 40px;
+  text-align: center;
+  
+  @media (max-width: 940px) {
+    margin-top: 30px;
+  }
+`;
+
+const SocialTitle = styled.div`
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  
+  @media (max-width: 940px) {
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+`;
+
+const SocialButton = styled(motion.button)`
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  @media (max-width: 940px) {
+    width: 60px;
+    height: 60px;
+  }
+`;
+
+const VKIcon = styled.div`
+  width: 32px;
+  height: 32px;
+  background-image: url('/icons8-vk-circled.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  
+  @media (max-width: 940px) {
+    width: 32px;
+    height: 32px;
+  }
+`;
+
+const TelegramIcon = styled.div`
+  width: 32px;
+  height: 32px;
+  background-image: url('/icons8-telegram-app.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  
+  @media (max-width: 940px) {
+    width: 32px;
+    height: 32px;
+  }
+`;
+
+const GoogleIcon = styled.div`
+  width: 32px;
+  height: 32px;
+  background-image: url('/icons8-google.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  
+  @media (max-width: 940px) {
+    width: 32px;
+    height: 32px;
+  }
+`;
+
+// Компонент для мобильных социальных кнопок (показывается только на экранах меньше 940px)
+const MobileSocialSection = styled.div`
+  display: none;
+  
+  @media (max-width: 940px) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 24px 0 20px 0;
+  }
+  
+  @media (max-width: 768px) {
+    margin: 20px 0 18px 0;
+  }
+  
+  @media (max-width: 480px) {
+    margin: 16px 0 16px 0;
+  }
+`;
+
+const SocialDivider = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  width: 100%;
+  
+  @media (max-width: 768px) {
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  
+  @media (max-width: 480px) {
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+`;
+
+const SocialDividerLine = styled.div`
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.2) 50%, 
+    transparent 100%
+  );
+`;
+
+// Скрыть левую колонку с соцсетями на экранах меньше 940px
+const LeftColumn = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 40px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+
+  @media (max-width: 940px) {
+    display: none;
   }
 `;
 

@@ -757,12 +757,13 @@ class AuthSecurityService:
         """
         Устанавливает refresh token в HttpOnly cookie
         """
+        from core.config import settings
         response.set_cookie(
             key="refresh_token",
             value=refresh_token,
             max_age=self.SESSION_LIFETIME_HOURS * 3600,  # В секундах
             httponly=True,
-            secure=True,  # Только HTTPS в продакшене
+            secure=settings.USE_SECURE_COOKIES,  # HTTPS в production, HTTP в development
             samesite="lax"
         )
 

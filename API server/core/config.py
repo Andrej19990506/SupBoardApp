@@ -101,6 +101,17 @@ class Settings(BaseSettings):
     FROM_EMAIL: str = os.getenv("FROM_EMAIL", "noreply@supboardapp.ru")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "https://supboardapp.ru")
 
+    # --- Настройки безопасности cookies ---
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    
+    @property
+    def USE_SECURE_COOKIES(self) -> bool:
+        """
+        Определяет, нужно ли использовать secure cookies.
+        В production всегда True (HTTPS), в development - False для совместимости.
+        """
+        return self.ENVIRONMENT == "production"
+
     class Config:
         case_sensitive = True
 

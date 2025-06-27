@@ -618,15 +618,16 @@ async def verify_sms_code(
         logger.info(f"DEBUG: user_data={user_data}")
         
         # 🛡️ УСТАНАВЛИВАЕМ HTTPONLY COOKIE с refresh token
+        from core.config import settings
         response.set_cookie(
             key="refresh_token",
             value=refresh_token,
             max_age=30 * 24 * 60 * 60,  # 30 дней в секундах
             httponly=True,  # Недоступен для JavaScript
-            secure=True,    # Только через HTTPS
+            secure=settings.USE_SECURE_COOKIES,    # HTTPS в production, HTTP в development
             samesite="lax"  # Защита от CSRF
         )
-        print(f"🔐 [verify-sms] Установлен HttpOnly cookie с refresh token")
+        print(f"🔐 [verify-sms] Установлен HttpOnly cookie с refresh token (secure={settings.USE_SECURE_COOKIES})")
         
         return {
             "user": user_data,
@@ -852,10 +853,10 @@ async def authenticate_telegram(
             value=refresh_token,
             max_age=30 * 24 * 60 * 60,  # 30 дней в секундах
             httponly=True,  # Недоступен для JavaScript
-            secure=True,    # Только через HTTPS
+            secure=settings.USE_SECURE_COOKIES,    # HTTPS в production, HTTP в development
             samesite="lax"  # Защита от CSRF
         )
-        print(f"🔐 [telegram-auth] Установлен HttpOnly cookie с refresh token")
+        print(f"🔐 [telegram-auth] Установлен HttpOnly cookie с refresh token (secure={settings.USE_SECURE_COOKIES})")
         
         return {
             "user": user_data,
@@ -1003,10 +1004,10 @@ async def authenticate_google(
             value=refresh_token,
             max_age=30 * 24 * 60 * 60,  # 30 дней в секундах
             httponly=True,  # Недоступен для JavaScript
-            secure=True,    # Только через HTTPS
+            secure=settings.USE_SECURE_COOKIES,    # HTTPS в production, HTTP в development
             samesite="lax"  # Защита от CSRF
         )
-        print(f"🔐 [google-auth] Установлен HttpOnly cookie с refresh token")
+        print(f"🔐 [google-auth] Установлен HttpOnly cookie с refresh token (secure={settings.USE_SECURE_COOKIES})")
         
         return {
             "user": user_data,
@@ -1183,10 +1184,10 @@ async def authenticate_vk(
             value=refresh_token,
             max_age=30 * 24 * 60 * 60,  # 30 дней в секундах
             httponly=True,  # Недоступен для JavaScript
-            secure=True,    # Только через HTTPS
+            secure=settings.USE_SECURE_COOKIES,    # HTTPS в production, HTTP в development
             samesite="lax"  # Защита от CSRF
         )
-        print(f"🔐 [vk-auth] Установлен HttpOnly cookie с refresh token")
+        print(f"🔐 [vk-auth] Установлен HttpOnly cookie с refresh token (secure={settings.USE_SECURE_COOKIES})")
         
         return json_response
         
@@ -1342,10 +1343,10 @@ async def register_user(
             value=refresh_token,
             max_age=30 * 24 * 60 * 60,  # 30 дней в секундах
             httponly=True,  # Недоступен для JavaScript
-            secure=True,    # Только через HTTPS
+            secure=settings.USE_SECURE_COOKIES,    # HTTPS в production, HTTP в development
             samesite="lax"  # Защита от CSRF
         )
-        logger.info(f"🔐 [register] Установлен HttpOnly cookie с refresh token")
+        logger.info(f"🔐 [register] Установлен HttpOnly cookie с refresh token (secure={settings.USE_SECURE_COOKIES})")
         
         # Коммитим все изменения в БД в самом конце
         try:
@@ -1630,10 +1631,10 @@ async def refresh_access_token(
             value=new_refresh_token,
             max_age=30 * 24 * 60 * 60,  # 30 дней в секундах
             httponly=True,  # Недоступен для JavaScript
-            secure=True,    # Только через HTTPS
+            secure=settings.USE_SECURE_COOKIES,    # HTTPS в production, HTTP в development
             samesite="lax"  # Защита от CSRF
         )
-        logger.info(f"🔐 [refresh] Обновлен HttpOnly cookie с новым refresh token")
+        logger.info(f"🔐 [refresh] Обновлен HttpOnly cookie с новым refresh token (secure={settings.USE_SECURE_COOKIES})")
         
         return {
             "user": user_data,
@@ -1766,7 +1767,7 @@ async def delete_device_session(
             value="",
             max_age=0,  # Немедленно удаляем
             httponly=True,
-            secure=True,
+            secure=settings.USE_SECURE_COOKIES,
             samesite="lax"
         )
         print(f"🧹 [delete-session] HttpOnly cookie очищен для удаленной текущей сессии")
@@ -1945,11 +1946,11 @@ async def auto_login_trusted_device(
             value=new_refresh_token,
             max_age=30 * 24 * 60 * 60,  # 30 дней в секундах
             httponly=True,  # Недоступен для JavaScript
-            secure=True,    # Только через HTTPS
+            secure=settings.USE_SECURE_COOKIES,    # HTTPS в production, HTTP в development
             samesite="lax"  # Защита от CSRF
         )
         
-        logger.info(f"🔐 [auto-login] Обновлен HttpOnly cookie для доверенного устройства")
+        logger.info(f"🔐 [auto-login] Обновлен HttpOnly cookie для доверенного устройства (secure={settings.USE_SECURE_COOKIES})")
         
         return {
             "user": user_data,
@@ -1987,7 +1988,7 @@ async def soft_logout_user(
                 value="",
                 max_age=0,
                 httponly=True,
-                secure=True,
+                secure=settings.USE_SECURE_COOKIES,
                 samesite="lax"
             )
             return {"message": "Выход выполнен (токен отсутствовал)"}
@@ -2009,7 +2010,7 @@ async def soft_logout_user(
                 value=new_refresh_token,
                 max_age=30 * 24 * 60 * 60,  # 30 дней
                 httponly=True,
-                secure=True,
+                secure=settings.USE_SECURE_COOKIES,
                 samesite="lax"
             )
             logger.info(f"🔐 Soft logout: новый HttpOnly cookie установлен")
@@ -2021,7 +2022,7 @@ async def soft_logout_user(
                 value="",
                 max_age=0,
                 httponly=True,
-                secure=True,
+                secure=settings.USE_SECURE_COOKIES,
                 samesite="lax"
             )
         
@@ -2035,7 +2036,7 @@ async def soft_logout_user(
             value="",
             max_age=0,
             httponly=True,
-            secure=True,
+            secure=settings.USE_SECURE_COOKIES,
             samesite="lax"
         )
         return {"message": "Выход выполнен с ошибкой"}

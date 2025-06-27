@@ -404,7 +404,11 @@ async def verify_sms_code(
     """
     try:
         # Очищаем номер телефона
+        logger.info(f"🔍 [verify-sms] Получен запрос на проверку кода")
+        logger.info(f"🔍 [verify-sms] Исходный номер от фронтенда: '{verify_data.phone}'")
+        logger.info(f"🔍 [verify-sms] Код от фронтенда: '{verify_data.code}'")
         phone = ''.join(filter(str.isdigit, verify_data.phone))
+        logger.info(f"🔍 [verify-sms] Очищенный номер: '{phone}'")
         
         # 🛡️ ГЕНЕРИРУЕМ DEVICE FINGERPRINT (используем тот же алгоритм что и при регистрации)
         device_fingerprints = security_service.generate_flexible_fingerprint(request)
@@ -422,7 +426,13 @@ async def verify_sms_code(
         logger.info(f"🌍 Location info: {location_info}")
         
         # Проверяем есть ли код для этого номера
+        logger.info(f"🔍 [verify-sms] Ищем код для номера: '{phone}'")
+        logger.info(f"🔍 [verify-sms] Коды в storage: {list(sms_codes_storage.keys())}")
+        logger.info(f"🔍 [verify-sms] Всего кодов в storage: {len(sms_codes_storage)}")
+        
         if phone not in sms_codes_storage:
+            logger.error(f"❌ [verify-sms] Код не найден для номера: '{phone}'")
+            logger.error(f"❌ [verify-sms] Доступные ключи: {list(sms_codes_storage.keys())}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Код не найден. Запросите новый код."
@@ -447,10 +457,13 @@ async def verify_sms_code(
             )
         
         # Проверяем правильность кода
+        logger.info(f"🔍 [verify-sms] Сравниваем коды: введенный='{verify_data.code}', сохраненный='{stored_data['code']}'")
         if verify_data.code != stored_data['code']:
             stored_data['attempts'] += 1
+            logger.warning(f"❌ [verify-sms] Неверный код! Попытка {stored_data['attempts']}/3")
             if stored_data['attempts'] >= 3:
                 del sms_codes_storage[phone]
+                logger.warning(f"❌ [verify-sms] Превышено количество попыток, код удален")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Превышено количество попыток. Запросите новый код."
@@ -459,6 +472,8 @@ async def verify_sms_code(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Неверный код"
             )
+        
+        logger.info(f"✅ [verify-sms] Код верный!")
         
         # Проверяем тип кода (логин или регистрация)
         code_type = stored_data.get('type', 'login')
@@ -1501,12 +1516,16 @@ async def send_registration_sms_code(
         
         # Сохраняем код с временем истечения (1 минута)
         expiry_time = datetime.now() + timedelta(minutes=1)
+        logger.info(f"🔍 [send-registration-sms] Сохраняем код для номера: '{phone}'")
+        logger.info(f"🔍 [send-registration-sms] Код: {code}, истекает: {expiry_time}")
         sms_codes_storage[phone] = {
             'code': code,
             'expires_at': expiry_time,
             'attempts': 0,
             'type': 'registration'  # Помечаем как код регистрации
         }
+        logger.info(f"🔍 [send-registration-sms] Код сохранен. Всего кодов в storage: {len(sms_codes_storage)}")
+        logger.info(f"🔍 [send-registration-sms] Ключи в storage: {list(sms_codes_storage.keys())}")
         
         # Формируем сообщение
         message = f"Код регистрации SUBboards: {code}"

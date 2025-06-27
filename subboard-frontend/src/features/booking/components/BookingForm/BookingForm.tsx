@@ -159,10 +159,18 @@ const BookingForm: FC<BookingFormProps> = ({
 
     const flatAllBookings = useMemo(() => Object.values(bookingsMap || {}).flat() as Booking[], [bookingsMap]);
     
-    // Временно используем старую логику для отображения
+    // Проверяем наличие выбранного инвентаря (новый и старый формат)
     const hasSelectedInventory = () => {
-        return form.boardCount + form.boardWithSeatCount + form.raftCount > 0 || 
-               Object.keys(form.selectedItems || {}).length > 0;
+        const oldFormatCount = form.boardCount + form.boardWithSeatCount + form.raftCount;
+        const newFormatCount = Object.values(form.selectedItems || {}).reduce((sum: number, count) => sum + (Number(count) || 0), 0);
+        const result = oldFormatCount > 0 || newFormatCount > 0;
+        console.log('[BookingForm] hasSelectedInventory check:', {
+            oldFormatCount,
+            newFormatCount,
+            selectedItems: form.selectedItems,
+            result
+        });
+        return result;
     };
 
     // Компонент для отображения выбранного инвентаря в новом формате
@@ -223,13 +231,19 @@ const BookingForm: FC<BookingFormProps> = ({
                 )}
 
                 <button type="button" onClick={() => {
+                    console.log('[BookingForm] Изменяем инвентарь, текущие значения:', {
+                        selectedItems: form.selectedItems,
+                        boardCount: form.boardCount,
+                        boardWithSeatCount: form.boardWithSeatCount,
+                        raftCount: form.raftCount
+                    });
                     setTempInventory({
                         boardCount: form.boardCount,
                         boardWithSeatCount: form.boardWithSeatCount,
                         raftCount: form.raftCount,
                     });
                     // При редактировании инициализируем текущими значениями формы
-                    setTempSelectedItems({ ...form.selectedItems });
+                    setTempSelectedItems({ ...(form.selectedItems || {}) });
                     setShowInventoryEditor(true);
                 }} style={{
                     background: 'none',
@@ -355,10 +369,7 @@ const BookingForm: FC<BookingFormProps> = ({
     // Хелпер для получения общего количества выбранного инвентаря
     const getTotalSelectedInventory = () => {
         // Новый формат
-        let newFormatTotal = 0;
-        for (const count of Object.values(form.selectedItems || {})) {
-            newFormatTotal += Number(count) || 0;
-        }
+        const newFormatTotal = Object.values(form.selectedItems || {}).reduce((sum: number, count) => sum + (Number(count) || 0), 0);
         
         // Старый формат
         const oldFormatTotal = form.boardCount + form.boardWithSeatCount + form.raftCount;
@@ -485,10 +496,22 @@ const BookingForm: FC<BookingFormProps> = ({
             ...(form.id && { id: form.id }),
             boardIds: [],
         };
+
+        // Debug logs для отправляемых данных
+        console.log('BookingForm handleSubmit - bookingToSave:', {
+            selectedItems: bookingToSave.selectedItems,
+            oldInventory: {
+                boardCount: bookingToSave.boardCount,
+                boardWithSeatCount: bookingToSave.boardWithSeatCount,
+                raftCount: bookingToSave.raftCount
+            },
+            clientName: bookingToSave.clientName
+        });
         
         try {
             const resultAction = await dispatch(addBooking(bookingToSave) as any);
             if (addBooking.fulfilled.match(resultAction)) {
+                console.log('BookingForm - addBooking result:', resultAction.payload);
                 await dispatch(fetchBookings());
                 const now = new Date();
                 const from = formatDateFns(now, 'yyyy-MM-dd');
@@ -708,8 +731,9 @@ const BookingForm: FC<BookingFormProps> = ({
                                 <Label>🛻 Инвентарь</Label>
                                 {!hasSelectedInventory() ? (
                                     <button type="button" onClick={() => {
+                                        console.log('[BookingForm] Открываем редактор инвентаря, текущие selectedItems:', form.selectedItems);
                                         // Инициализируем текущими значениями формы
-                                        setTempSelectedItems({ ...form.selectedItems });
+                                        setTempSelectedItems({ ...(form.selectedItems || {}) });
                                         setShowInventoryEditor(true);
                                     }} style={{
                                         background: '#23232a',
@@ -886,7 +910,20 @@ const BookingForm: FC<BookingFormProps> = ({
                         }} onClick={e => e.stopPropagation()}>
                             <InventorySelector
                                 selectedItems={tempSelectedItems}
-                                onChange={setTempSelectedItems}
+                                onChange={(newItems) => {
+                                    console.log('[BookingForm] InventorySelector onChange:', newItems);
+                                    setTempSelectedItems(newItems);
+                                    // Автоматически применяем изменения к основной форме (улучшение UX)
+                                    setForm(prev => ({
+                                        ...prev,
+                                        selectedItems: { ...newItems },
+                                        // Обнуляем старый формат при использовании нового
+                                        boardCount: 0,
+                                        boardWithSeatCount: 0,
+                                        raftCount: 0
+                                    }));
+                                    console.log('[BookingForm] Автоматически применили инвентарь к форме:', newItems);
+                                }}
                                 error={null}
                                 plannedDate={form.plannedDate}
                                 plannedTime={form.plannedTime}
@@ -895,33 +932,15 @@ const BookingForm: FC<BookingFormProps> = ({
                             />
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
                                 <button type="button" onClick={() => setShowInventoryEditor(false)} style={{
-                                    background: 'none',
+                                    background: '#007AFF',
+                                    color: '#fff',
                                     border: 'none',
-                                    color: '#86868B',
+                                    borderRadius: 10,
+                                    padding: '10px 28px',
                                     fontSize: 16,
+                                    fontWeight: 600,
                                     cursor: 'pointer',
-                                }}>Отмена</button>
-                                <button type="button" onClick={() => {
-                                    // Применяем новый формат инвентаря
-                                    setForm(prev => ({ 
-                                        ...prev, 
-                                        selectedItems: { ...tempSelectedItems }
-                                    }));
-                                    setShowInventoryEditor(false);
-                                }}
-                                    disabled={Object.values(tempSelectedItems).reduce((sum, count) => sum + count, 0) <= 0}
-                                    style={{
-                                        background: '#007AFF',
-                                        color: '#fff',
-                                        border: 'none',
-                                        borderRadius: 10,
-                                        padding: '10px 28px',
-                                        fontSize: 16,
-                                        fontWeight: 600,
-                                        cursor: Object.values(tempSelectedItems).reduce((sum, count) => sum + count, 0) <= 0 ? 'not-allowed' : 'pointer',
-                                        opacity: Object.values(tempSelectedItems).reduce((sum, count) => sum + count, 0) <= 0 ? 0.5 : 1,
-                                    }}
-                                >ОК</button>
+                                }}>Закрыть</button>
                             </div>
                         </div>
                     </div>

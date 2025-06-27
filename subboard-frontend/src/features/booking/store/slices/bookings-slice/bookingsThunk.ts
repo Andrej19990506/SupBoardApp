@@ -70,7 +70,25 @@ export const updateBookingAsync = createAsyncThunk(
   async ({ id, booking }: { id: number; booking: Partial<Booking> }, { rejectWithValue }) => {
     try {
       console.log('[updateBookingAsync] Начало обновления:', { id, booking });
-      const response = await bookingsApi.updateBooking(id, booking);
+      
+      // Маппинг camelCase → snake_case для обновления
+      const payload: any = {};
+      if (booking.clientName !== undefined) payload.client_name = booking.clientName;
+      if (booking.phone !== undefined) payload.phone = booking.phone;
+      if (booking.plannedStartTime !== undefined) payload.planned_start_time = booking.plannedStartTime;
+      if (booking.serviceType !== undefined) payload.service_type = booking.serviceType === 'аренда' ? 'rent' : booking.serviceType;
+      if (booking.boardCount !== undefined) payload.board_count = booking.boardCount;
+      if (booking.boardWithSeatCount !== undefined) payload.board_with_seat_count = booking.boardWithSeatCount;
+      if (booking.raftCount !== undefined) payload.raft_count = booking.raftCount;
+      if (booking.durationInHours !== undefined) payload.duration_in_hours = booking.durationInHours;
+      if (booking.selectedItems !== undefined) payload.selected_items = booking.selectedItems; // Новая система инвентаря
+      if (booking.comment !== undefined) payload.comment = booking.comment;
+      if (booking.status !== undefined) payload.status = booking.status;
+      if (booking.actualStartTime !== undefined) payload.actual_start_time = booking.actualStartTime;
+      if (booking.timeReturnedByClient !== undefined) payload.time_returned_by_client = booking.timeReturnedByClient;
+      
+      console.log('[updateBookingAsync] Payload с маппингом:', payload);
+      const response = await bookingsApi.updateBooking(id, payload);
       console.log('[updateBookingAsync] Успешный ответ:', response.data);
       return response.data;
     } catch (error: any) {

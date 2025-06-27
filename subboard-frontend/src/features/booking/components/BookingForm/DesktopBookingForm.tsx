@@ -496,6 +496,18 @@ const DesktopBookingForm: FC<DesktopBookingFormProps> = ({
             boardIds: [],
         };
         
+        // Debug logs для отправляемых данных
+        console.log('DesktopBookingForm handleSubmit - bookingToSave:', {
+            selectedItems: bookingToSave.selectedItems,
+            oldInventory: {
+                boardCount: bookingToSave.boardCount,
+                boardWithSeatCount: bookingToSave.boardWithSeatCount,
+                raftCount: bookingToSave.raftCount
+            },
+            clientName: bookingToSave.clientName,
+            isUpdate: !!form.id
+        });
+
         try {
             let resultAction;
             if (form.id) {

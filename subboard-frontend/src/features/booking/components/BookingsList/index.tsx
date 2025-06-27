@@ -1,4 +1,4 @@
-import { useState, useMemo} from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { FC, MouseEvent } from 'react';
 import { format as formatDateFns, parseISO, addHours, formatDistanceStrict, isAfter, add, isBefore, isToday } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -40,6 +40,7 @@ import seatIcon from '@/assets/seat.png';
 import skiIcon from '@/assets/ski.png';
 import { getAvailableBoardsCount} from '@features/booking/utils/bookingUtils';
 import InventorySelector from '@features/booking/components/BookingForm/InventorySelector';
+import { inventoryApi, type InventoryType } from '@features/booking/services/inventoryApi';
 import QuickActions from './QuickActions';
 import DesktopBookingsList from './DesktopBookingsList';
 import ReminderSettingsComponent from './ReminderSettings';
@@ -233,6 +234,23 @@ const BookingsList: FC<BookingsListProps> = ({
     // Состояния для напоминаний
     const [showReminderSettings, setShowReminderSettings] = useState(false);
     const [showReminderStatus, setShowReminderStatus] = useState(false);
+    
+    // Типы инвентаря для отображения
+    const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
+
+    // Загружаем типы инвентаря
+    useEffect(() => {
+        const loadInventoryTypes = async () => {
+            try {
+                const response = await inventoryApi.getInventoryTypes();
+                setInventoryTypes(response.data.filter(type => type.is_active));
+            } catch (err) {
+                console.error('Ошибка загрузки типов инвентаря:', err);
+            }
+        };
+        loadInventoryTypes();
+    }, []);
+    
     const [reminderSettings, setReminderSettings] = useState<ReminderSettings>({
         enabled: true,
         timeBeforeInMinutes: 60,
@@ -644,6 +662,71 @@ const BookingsList: FC<BookingsListProps> = ({
         }
     };
 
+    // Функция для отображения инвентаря (поддерживает новый и старый формат)
+    const renderMobileInventory = (booking: Booking) => {
+        const selectedItems = booking.selectedItems || {};
+        const hasNewItems = Object.keys(selectedItems).length > 0;
+        const hasOldItems = (booking.boardCount || 0) + (booking.boardWithSeatCount || 0) + (booking.raftCount || 0) > 0;
+
+        // Debug logs
+        console.log('renderMobileInventory debug:', {
+            bookingId: booking.id,
+            clientName: booking.clientName,
+            selectedItems,
+            hasNewItems,
+            hasOldItems,
+            inventoryTypesLoaded: inventoryTypes.length
+        });
+
+        if (!hasNewItems && !hasOldItems) {
+            return <span style={{ color: '#86868B' }}>Нет инвентаря</span>;
+        }
+
+        return (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {/* Новый формат инвентаря */}
+                {hasNewItems && Object.entries(selectedItems).map(([typeIdStr, count]) => {
+                    const typeId = parseInt(typeIdStr);
+                    const countNum = Number(count) || 0;
+                    const type = inventoryTypes.find(t => t.id === typeId);
+                    if (!type || countNum <= 0) return null;
+
+                    return (
+                        <span key={typeId} style={{ display: 'inline-flex', alignItems: 'center', gap: 0, marginRight: 4 }}>
+                            <span style={{ fontSize: 20 }}>{type.icon_name || '📦'}</span>
+                            <span style={{ color: '#fff', fontWeight: 600, fontSize: 13, marginLeft: 2 }}>{countNum}</span>
+                        </span>
+                    );
+                })}
+
+                {/* Старый формат для совместимости */}
+                {!hasNewItems && (
+                    <>
+                        {(booking.boardCount || 0) > 0 && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 0, marginRight: 4 }}>
+                                <img src={canoeIcon} alt="sup" style={{ width: 24, height: 24, filter: 'drop-shadow(0 1px 2px #007aff44)' }} />
+                                <span style={{ color: '#fff', fontWeight: 600, fontSize: 13, marginLeft: 2 }}>{booking.boardCount}</span>
+                            </span>
+                        )}
+                        {(booking.boardWithSeatCount || 0) > 0 && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 0, marginRight: 4 }}>
+                                <img src={canoeIcon} alt="sup" style={{ width: 24, height: 24, filter: 'drop-shadow(0 1px 2px #007aff44)' }} />
+                                <img src={seatIcon} alt="seat" style={{ width: 18, height: 18, marginLeft: -8, filter: 'drop-shadow(0 1px 2px #007aff44)' }} />
+                                <span style={{ color: '#fff', fontWeight: 600, fontSize: 13, marginLeft: 2 }}>{booking.boardWithSeatCount}</span>
+                            </span>
+                        )}
+                        {(booking.raftCount || 0) > 0 && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 0, marginRight: 4 }}>
+                                <img src={skiIcon} alt="raft" style={{ width: 28, height: 28, filter: 'drop-shadow(0 1px 2px #007aff44)' }} />
+                                <span style={{ color: '#fff', fontWeight: 600, fontSize: 13, marginLeft: 2 }}>{booking.raftCount}</span>
+                            </span>
+                        )}
+                    </>
+                )}
+            </span>
+        );
+    };
+
     return (
         <ModalOverlay $isClosing={isClosing} onClick={handleOverlayClick}>
             <ModalContainer $isClosing={isClosing}>
@@ -770,6 +853,7 @@ const BookingsList: FC<BookingsListProps> = ({
                                 isOverdue={isOverdue(booking)}
                                 isUpcoming={isUpcoming(booking)}
                                 isLarge={isLargeOrder(booking)}
+                                renderInventory={renderMobileInventory}
                             />
                         ))
                     ) : (
@@ -829,6 +913,7 @@ interface BookingCardProps {
     isOverdue?: boolean;
     isUpcoming?: boolean;
     isLarge?: boolean;
+    renderInventory: (booking: Booking) => React.ReactNode;
 }
 
 const BookingCard: FC<BookingCardProps> = ({ 
@@ -839,7 +924,8 @@ const BookingCard: FC<BookingCardProps> = ({
     isVIP = false,
     isOverdue = false,
     isUpcoming = false,
-    isLarge = false
+    isLarge = false,
+    renderInventory
 }) => {
     const [isConfirming, setIsConfirming] = useState(false);
     const [editInventoryOpen, setEditInventoryOpen] = useState(false);
@@ -1098,35 +1184,12 @@ const BookingCard: FC<BookingCardProps> = ({
                 <BookingInfo>
                     <div>{booking.clientName} ({booking.phone})</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            {/* Обычные доски */}
-                            {boardCount > 0 && (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 0, marginRight: 4 }}>
-                                    <img src={canoeIcon} alt="sup" style={{ width: 24, height: 24, filter: 'drop-shadow(0 1px 2px #007aff44)' }} />
-                                    <span style={{ color: '#fff', fontWeight: 600, fontSize: 13, marginLeft: 2 }}>{boardCount}</span>
-                                </span>
-                            )}
-                            {/* Доски с креслом */}
-                            {boardWithSeatCount > 0 && (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 0, marginRight: 4 }}>
-                                    <img src={canoeIcon} alt="sup" style={{ width: 24, height: 24, filter: 'drop-shadow(0 1px 2px #007aff44)' }} />
-                                    <img src={seatIcon} alt="seat" style={{ width: 18, height: 18, marginLeft: -8, filter: 'drop-shadow(0 1px 2px #007aff44)' }} />
-                                    <span style={{ color: '#fff', fontWeight: 600, fontSize: 13, marginLeft: 2 }}>{boardWithSeatCount}</span>
-                                </span>
-                            )}
-                            {/* Плоты */}
-                            {raftCount > 0 && (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 0, marginRight: 4 }}>
-                                    <img src={skiIcon} alt="raft" style={{ width: 28, height: 28, filter: 'drop-shadow(0 1px 2px #007aff44)' }} />
-                                    <span style={{ color: '#fff', fontWeight: 600, fontSize: 13, marginLeft: 2 }}>{raftCount}</span>
-                                </span>
-                            )}
-                        </span>
+                        {renderInventory(booking)}
                         {(booking.status === BookingStatus.BOOKED || booking.status === BookingStatus.IN_USE) && (
                             <button
                                 onClick={() => {
-                                    // Инициализируем пустой объект - новый компонент сам загрузит актуальный инвентарь
-                                    setTempSelectedItems({});
+                                    // Инициализируем с текущим инвентарем бронирования
+                                    setTempSelectedItems(booking.selectedItems || {});
                                     setEditInventoryOpen(true);
                                 }}
                                 style={{
@@ -1237,7 +1300,25 @@ const BookingCard: FC<BookingCardProps> = ({
                             plannedTime={booking.plannedStartTime ? formatDateFns(parseISO(booking.plannedStartTime), 'HH:mm') : undefined}
                             durationInHours={booking.durationInHours}
                             bookingId={booking.id?.toString()}
-                            onClose={() => setEditInventoryOpen(false)}
+                            onClose={async () => {
+                                // Сохраняем изменения перед закрытием
+                                try {
+                                    await dispatch(updateBookingAsync({
+                                        id: typeof booking.id === 'string' ? parseInt(booking.id, 10) : booking.id,
+                                        booking: {
+                                            selectedItems: tempSelectedItems,
+                                            // Обнуляем старые поля
+                                            boardCount: 0,
+                                            boardWithSeatCount: 0,
+                                            raftCount: 0
+                                        }
+                                    }));
+                                    console.log('Mobile inventory updated successfully');
+                                } catch (error) {
+                                    console.error('Ошибка при сохранении инвентаря (мобильная версия):', error);
+                                }
+                                setEditInventoryOpen(false);
+                            }}
                         />
                     </div>
                 </div>

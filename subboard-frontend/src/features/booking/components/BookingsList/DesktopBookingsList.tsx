@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { FC, MouseEvent } from 'react';
 import { format as formatDateFns, parseISO, addHours, formatDistanceStrict, isAfter, isBefore, isToday } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -27,6 +27,7 @@ import ReminderSettingsComponent from './ReminderSettings';
 import ReminderStatusComponent from './ReminderStatus';
 import QuickStatusActions from './QuickStatusActions';
 import { useAppSelector } from '@features/booking/store/hooks';
+import { inventoryApi, type InventoryType } from '@features/booking/services/inventoryApi';
 
 // Стили для десктопной версии
 const DesktopContainer = styled.div`
@@ -604,6 +605,7 @@ const DesktopBookingsList: FC<DesktopBookingsListProps> = ({
         boardWithSeatCount: 0,
         raftCount: 0,
     });
+    const [tempSelectedItems, setTempSelectedItems] = useState<Record<number, number>>({});
     
     // Состояния для напоминаний
     const [showReminderSettings, setShowReminderSettings] = useState(false);
@@ -646,6 +648,22 @@ const DesktopBookingsList: FC<DesktopBookingsListProps> = ({
             return [];
         }
     }, [bookingsMap]);
+
+    // Типы инвентаря для отображения
+    const [inventoryTypes, setInventoryTypes] = useState<InventoryType[]>([]);
+
+    // Загружаем типы инвентаря
+    useEffect(() => {
+        const loadInventoryTypes = async () => {
+            try {
+                const response = await inventoryApi.getInventoryTypes();
+                setInventoryTypes(response.data.filter(type => type.is_active));
+            } catch (err) {
+                console.error('Ошибка загрузки типов инвентаря:', err);
+            }
+        };
+        loadInventoryTypes();
+    }, []);
 
     const handleOverlayClick = (e: MouseEvent) => {
         if (e.target === e.currentTarget) {
@@ -843,6 +861,9 @@ const DesktopBookingsList: FC<DesktopBookingsListProps> = ({
 
     // Обработчики для редактирования инвентаря
     const handleEditInventory = (booking: Booking) => {
+        // Инициализируем с текущим инвентарем (новая система)
+        setTempSelectedItems(booking.selectedItems || {});
+        // Старая система для совместимости (на случай если новой нет)
         setTempInventory({
             boardCount: booking.boardCount || 0,
             boardWithSeatCount: booking.boardWithSeatCount || 0,
@@ -855,26 +876,22 @@ const DesktopBookingsList: FC<DesktopBookingsListProps> = ({
     const handleSaveInventory = async () => {
         if (editInventoryBookingId) {
             const booking = processedBookings.find(b => b.id === editInventoryBookingId);
-            if (booking && (
-                tempInventory.boardCount !== (booking.boardCount || 0) ||
-                tempInventory.boardWithSeatCount !== (booking.boardWithSeatCount || 0) ||
-                tempInventory.raftCount !== (booking.raftCount || 0)
-            )) {
+            if (booking) {
                 try {
+                    // Используем новую систему инвентаря (selectedItems)
                     await dispatch(updateBookingAsync({
                         id: typeof booking.id === 'string' ? parseInt(booking.id, 10) : booking.id,
                         booking: {
-                            boardCount: tempInventory.boardCount,
-                            boardWithSeatCount: tempInventory.boardWithSeatCount,
-                            raftCount: tempInventory.raftCount,
+                            selectedItems: tempSelectedItems,
+                            // Обнуляем старые поля
+                            boardCount: 0,
+                            boardWithSeatCount: 0,
+                            raftCount: 0
                         }
                     }));
-                    // Redux уже обновил бронирования через updateBookingAsync.fulfilled
-                    // Нет необходимости в дополнительном fetchBookings()
-                    await dispatch(fetchBoards());
-                    // await dispatch(fetchBoardBookings());
+                    console.log('Desktop inventory updated successfully');
                 } catch (error) {
-                    console.error('Ошибка при сохранении инвентаря:', error);
+                    console.error('Ошибка при сохранении инвентаря (десктопная версия):', error);
                 }
             }
         }
@@ -885,43 +902,8 @@ const DesktopBookingsList: FC<DesktopBookingsListProps> = ({
         setEditInventoryBookingId(null);
     };
 
-    // Обработчики изменения количества инвентаря
-    const handleInventoryChange = (type: 'boardCount' | 'boardWithSeatCount' | 'raftCount', delta: number) => {
-        setTempInventory(prev => ({
-            ...prev,
-            [type]: Math.max(0, prev[type] + delta)
-        }));
-    };
-
-    // Быстрые пресеты
-    const handlePreset = (preset: { boardCount: number; boardWithSeatCount: number; raftCount: number }) => {
-        setTempInventory(preset);
-    };
-
-    // Получаем доступный инвентарь для редактируемой записи
-    const getAvailableInventoryForBooking = (booking: Booking) => {
-        try {
-            const plannedDate = parseISO(booking.plannedStartTime);
-            const duration = booking.durationInHours || 4;
-            const totalBoards = boards.length;
-            const availableBoards = getAvailableBoardsCount(plannedDate, duration, flatAllBookings, totalBoards, String(booking.id));
-            const availableSeats = getAvailableSeatsCount(plannedDate, duration, flatAllBookings, totalBoards, String(booking.id));
-            const availableRafts = Math.floor(availableBoards / 2);
-            
-            return {
-                board: Math.max(0, availableBoards),
-                board_with_seat: Math.max(0, availableBoards),
-                raft: Math.max(0, availableRafts),
-            };
-        } catch (error) {
-            console.error('Ошибка при расчете доступного инвентаря:', error);
-            return {
-                board: 0,
-                board_with_seat: 0,
-                raft: 0,
-            };
-        }
-    };
+    // Функции для старой системы инвентаря (больше не используются)
+    // Оставлены для совместимости, могут быть удалены позже
 
     // Экспорт данных
     const handleExport = () => {
@@ -953,6 +935,71 @@ const DesktopBookingsList: FC<DesktopBookingsListProps> = ({
         setShowReminderSettings(false);
         // Здесь можно добавить сохранение в localStorage или отправку на сервер
         localStorage.setItem('reminderSettings', JSON.stringify(newSettings));
+    };
+
+    // Функция для отображения инвентаря (поддерживает новый и старый формат)
+    const renderBookingInventory = (booking: Booking) => {
+        const selectedItems = booking.selectedItems || {};
+        const hasNewItems = Object.keys(selectedItems).length > 0;
+        const hasOldItems = (booking.boardCount || 0) + (booking.boardWithSeatCount || 0) + (booking.raftCount || 0) > 0;
+
+        // Debug logs (временно отключены)
+        // console.log('renderBookingInventory (desktop) debug:', {
+        //     bookingId: booking.id,
+        //     clientName: booking.clientName,
+        //     selectedItems,
+        //     hasNewItems,
+        //     hasOldItems,
+        //     inventoryTypesLoaded: inventoryTypes.length
+        // });
+
+        if (!hasNewItems && !hasOldItems) {
+            return <span style={{ color: '#86868B' }}>—</span>;
+        }
+
+        return (
+            <InventoryDisplay>
+                {/* Новый формат инвентаря */}
+                {hasNewItems && Object.entries(selectedItems).map(([typeIdStr, count]) => {
+                    const typeId = parseInt(typeIdStr);
+                    const countNum = Number(count) || 0;
+                    const type = inventoryTypes.find(t => t.id === typeId);
+                    if (!type || countNum <= 0) return null;
+
+                    return (
+                        <InventoryItem key={typeId}>
+                            <span style={{ fontSize: 16 }}>{type.icon_name || '📦'}</span>
+                            <span>{countNum}</span>
+                        </InventoryItem>
+                    );
+                })}
+
+                {/* Старый формат для совместимости */}
+                {!hasNewItems && (
+                    <>
+                        {(booking.boardCount || 0) > 0 && (
+                            <InventoryItem>
+                                <img src={canoeIcon} alt="sup" style={{ width: 16, height: 16 }} />
+                                {booking.boardCount}
+                            </InventoryItem>
+                        )}
+                        {(booking.boardWithSeatCount || 0) > 0 && (
+                            <InventoryItem>
+                                <img src={canoeIcon} alt="sup" style={{ width: 16, height: 16 }} />
+                                <img src={seatIcon} alt="seat" style={{ width: 12, height: 12, marginLeft: -4 }} />
+                                {booking.boardWithSeatCount}
+                            </InventoryItem>
+                        )}
+                        {(booking.raftCount || 0) > 0 && (
+                            <InventoryItem>
+                                <img src={skiIcon} alt="raft" style={{ width: 18, height: 18 }} />
+                                {booking.raftCount}
+                            </InventoryItem>
+                        )}
+                    </>
+                )}
+            </InventoryDisplay>
+        );
     };
 
     return (
@@ -1176,27 +1223,7 @@ const DesktopBookingsList: FC<DesktopBookingsListProps> = ({
                                     </TableCell>
                                     <TableCell>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <InventoryDisplay>
-                                                {(booking.boardCount || 0) > 0 && (
-                                                    <InventoryItem>
-                                                        <img src={canoeIcon} alt="sup" style={{ width: 16, height: 16 }} />
-                                                        {booking.boardCount}
-                                                    </InventoryItem>
-                                                )}
-                                                {(booking.boardWithSeatCount || 0) > 0 && (
-                                                    <InventoryItem>
-                                                        <img src={canoeIcon} alt="sup" style={{ width: 16, height: 16 }} />
-                                                        <img src={seatIcon} alt="seat" style={{ width: 12, height: 12, marginLeft: -4 }} />
-                                                        {booking.boardWithSeatCount}
-                                                    </InventoryItem>
-                                                )}
-                                                {(booking.raftCount || 0) > 0 && (
-                                                    <InventoryItem>
-                                                        <img src={skiIcon} alt="raft" style={{ width: 18, height: 18 }} />
-                                                        {booking.raftCount}
-                                                    </InventoryItem>
-                                                )}
-                                            </InventoryDisplay>
+                                            {renderBookingInventory(booking)}
                                             {(booking.status === BookingStatus.BOOKED || booking.status === BookingStatus.IN_USE) && (
                                                 <button
                                                     onClick={() => handleEditInventory(booking)}
@@ -1322,148 +1349,43 @@ const DesktopBookingsList: FC<DesktopBookingsListProps> = ({
                     )}
                 </TableContainer>
 
-                {/* Десктопный редактор инвентаря */}
+                {/* Десктопный редактор инвентаря (новая система) */}
                 {editInventoryBookingId && (() => {
                     const booking = processedBookings.find(b => b.id === editInventoryBookingId);
                     if (!booking) return null;
                     
-                    const available = getAvailableInventoryForBooking(booking);
-                    const totalSelected = tempInventory.boardCount + tempInventory.boardWithSeatCount + tempInventory.raftCount;
-                    
                     return (
-                        <InventoryEditorOverlay onClick={handleCancelEditInventory}>
-                            <InventoryEditorModal onClick={e => e.stopPropagation()}>
-                                <InventoryEditorHeader>
-                                    <div>
-                                        <InventoryEditorTitle>
-                                            📦 Редактирование инвентаря
-                                        </InventoryEditorTitle>
-                                        <ClientInfo>
-                                            <span>{booking.clientName}</span> • {formatDateFns(parseISO(booking.plannedStartTime), 'HH:mm, d MMMM', { locale: ru })}
-                                        </ClientInfo>
-                                    </div>
-                                    <ActionButton onClick={handleCancelEditInventory}>
-                                        ✕
-                                    </ActionButton>
-                                </InventoryEditorHeader>
-
-                                <InventoryGrid>
-                                    {/* Сапборды */}
-                                    <InventoryCard>
-                                        <InventoryIcon>
-                                            <img src={canoeIcon} alt="sup" style={{ width: 32, height: 32 }} />
-                                        </InventoryIcon>
-                                        <InventoryLabel>Сапборды</InventoryLabel>
-                                        <InventoryCounter>
-                                            <CounterButton 
-                                                $disabled={tempInventory.boardCount <= 0}
-                                                onClick={() => handleInventoryChange('boardCount', -1)}
-                                            >
-                                                −
-                                            </CounterButton>
-                                            <CounterValue>{tempInventory.boardCount}</CounterValue>
-                                            <CounterButton 
-                                                $disabled={tempInventory.boardCount >= available.board}
-                                                onClick={() => handleInventoryChange('boardCount', 1)}
-                                            >
-                                                +
-                                            </CounterButton>
-                                        </InventoryCounter>
-                                        <AvailabilityInfo>
-                                            Доступно: {available.board}
-                                        </AvailabilityInfo>
-                                    </InventoryCard>
-
-                                    {/* Сапборды с креслом */}
-                                    <InventoryCard>
-                                        <InventoryIcon>
-                                            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                                                <img src={canoeIcon} alt="sup" style={{ width: 32, height: 32 }} />
-                                                <img src={seatIcon} alt="seat" style={{ width: 24, height: 24, marginLeft: -8 }} />
-                                            </div>
-                                        </InventoryIcon>
-                                        <InventoryLabel>С креслом</InventoryLabel>
-                                        <InventoryCounter>
-                                            <CounterButton 
-                                                $disabled={tempInventory.boardWithSeatCount <= 0}
-                                                onClick={() => handleInventoryChange('boardWithSeatCount', -1)}
-                                            >
-                                                −
-                                            </CounterButton>
-                                            <CounterValue>{tempInventory.boardWithSeatCount}</CounterValue>
-                                            <CounterButton 
-                                                $disabled={tempInventory.boardWithSeatCount >= available.board_with_seat}
-                                                onClick={() => handleInventoryChange('boardWithSeatCount', 1)}
-                                            >
-                                                +
-                                            </CounterButton>
-                                        </InventoryCounter>
-                                        <AvailabilityInfo>
-                                            Доступно: {available.board_with_seat}
-                                        </AvailabilityInfo>
-                                    </InventoryCard>
-
-                                    {/* Плоты */}
-                                    <InventoryCard>
-                                        <InventoryIcon>
-                                            <img src={skiIcon} alt="raft" style={{ width: 36, height: 36 }} />
-                                        </InventoryIcon>
-                                        <InventoryLabel>Плоты</InventoryLabel>
-                                        <InventoryCounter>
-                                            <CounterButton 
-                                                $disabled={tempInventory.raftCount <= 0}
-                                                onClick={() => handleInventoryChange('raftCount', -1)}
-                                            >
-                                                −
-                                            </CounterButton>
-                                            <CounterValue>{tempInventory.raftCount}</CounterValue>
-                                            <CounterButton 
-                                                $disabled={tempInventory.raftCount >= available.raft}
-                                                onClick={() => handleInventoryChange('raftCount', 1)}
-                                            >
-                                                +
-                                            </CounterButton>
-                                        </InventoryCounter>
-                                        <AvailabilityInfo>
-                                            Доступно: {available.raft}
-                                        </AvailabilityInfo>
-                                    </InventoryCard>
-                                </InventoryGrid>
-
-                                {/* Быстрые пресеты */}
-                                <QuickPresets>
-                                    <PresetsLabel>Быстрый выбор:</PresetsLabel>
-                                    <PresetButton onClick={() => handlePreset({ boardCount: 1, boardWithSeatCount: 0, raftCount: 0 })}>
-                                        👤 1 человек
-                                    </PresetButton>
-                                    <PresetButton onClick={() => handlePreset({ boardCount: 2, boardWithSeatCount: 0, raftCount: 0 })}>
-                                        👥 Пара
-                                    </PresetButton>
-                                    <PresetButton onClick={() => handlePreset({ boardCount: 2, boardWithSeatCount: 2, raftCount: 0 })}>
-                                        👨‍👩‍👧‍👦 Семья
-                                    </PresetButton>
-                                    <PresetButton onClick={() => handlePreset({ boardCount: 0, boardWithSeatCount: 0, raftCount: 1 })}>
-                                        🚣 Плот
-                                    </PresetButton>
-                                    <PresetButton onClick={() => handlePreset({ boardCount: 0, boardWithSeatCount: 0, raftCount: 0 })}>
-                                        🗑️ Очистить
-                                    </PresetButton>
-                                </QuickPresets>
-
-                                <EditorActions>
-                                    <ActionButton onClick={handleCancelEditInventory}>
-                                        Отмена
-                                    </ActionButton>
-                                    <ActionButton 
-                                        $variant="primary" 
-                                        onClick={handleSaveInventory}
-                                        disabled={totalSelected <= 0}
-                                    >
-                                        💾 Сохранить ({totalSelected} {totalSelected === 1 ? 'единица' : totalSelected < 5 ? 'единицы' : 'единиц'})
-                                    </ActionButton>
-                                </EditorActions>
-                            </InventoryEditorModal>
-                        </InventoryEditorOverlay>
+                        <div style={{
+                            position: 'fixed',
+                            inset: 0,
+                            zIndex: 2000,
+                            background: 'rgba(0,0,0,0.4)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 20
+                        }} onClick={handleCancelEditInventory}>
+                            <div style={{
+                                width: 'min(90vw, 600px)',
+                                height: 'min(90vh, 800px)',
+                                maxWidth: '600px',
+                                maxHeight: '800px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                overflow: 'hidden',
+                                position: 'relative'
+                            }} onClick={e => e.stopPropagation()}>
+                                <InventorySelector
+                                    selectedItems={tempSelectedItems}
+                                    onChange={setTempSelectedItems}
+                                    plannedDate={booking.plannedStartTime ? booking.plannedStartTime.split('T')[0] : undefined}
+                                    plannedTime={booking.plannedStartTime ? formatDateFns(parseISO(booking.plannedStartTime), 'HH:mm') : undefined}
+                                    durationInHours={booking.durationInHours}
+                                    bookingId={booking.id?.toString()}
+                                    onClose={handleSaveInventory}
+                                />
+                            </div>
+                        </div>
                     );
                 })()}
 

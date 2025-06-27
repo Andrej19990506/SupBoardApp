@@ -146,6 +146,8 @@ const bookingsSlice = createSlice({
                         boardCount: booking.board_count,
                         boardWithSeatCount: booking.board_with_seat_count,
                         raftCount: booking.raft_count,
+                        selectedItems: booking.selected_items, // Добавляем маппинг для новой системы инвентаря
+                        durationInHours: booking.duration_in_hours,
                         createdAt: booking.created_at,
                         updatedAt: booking.updated_at,
                     };
@@ -187,6 +189,8 @@ const bookingsSlice = createSlice({
                                 boardCount: updatedBooking.board_count,
                                 boardWithSeatCount: updatedBooking.board_with_seat_count,
                                 raftCount: updatedBooking.raft_count,
+                                selectedItems: updatedBooking.selected_items, // Добавляем маппинг для новой системы инвентаря
+                                durationInHours: updatedBooking.duration_in_hours,
                                 createdAt: updatedBooking.created_at,
                                 updatedAt: updatedBooking.updated_at,
                             };
